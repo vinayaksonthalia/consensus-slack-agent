@@ -16,7 +16,7 @@ describe('dismissal memory', () => {
     recordDismissal(offending, decisionId);
 
     // Same text, only whitespace/casing/trailing punctuation differ → still matches.
-    const variant = "  lets just   spin up MONGODB for the analytics   service  ";
+    const variant = '  lets just   spin up MONGODB for the analytics   service  ';
     assert.strictEqual(isKnownFalsePositive(variant, decisionId), true);
 
     // A genuinely different message against the same decision does not match.

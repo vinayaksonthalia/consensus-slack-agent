@@ -1,4 +1,4 @@
-import { getDecision, recordDismissal, recordEvent, supersede, dismissDecision } from '../../consensus-core/ledger.js';
+import { dismissDecision, getDecision, recordDismissal, recordEvent, supersede } from '../../consensus-core/ledger.js';
 
 /**
  * Safely read the string `value` from an interactive action payload.

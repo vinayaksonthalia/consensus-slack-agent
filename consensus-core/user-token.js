@@ -8,7 +8,7 @@
  * user so RTS keeps working in Socket Mode.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const BASE_DIR = './data/installations';

@@ -18,9 +18,7 @@
     }
   },
   "oauth_config": {
-    "redirect_urls": [
-      "https://accuracy-rapids-thread-theatre.trycloudflare.com/slack/oauth_redirect"
-    ],
+    "redirect_urls": ["https://accuracy-rapids-thread-theatre.trycloudflare.com/slack/oauth_redirect"],
     "scopes": {
       "user": [
         "search:read",

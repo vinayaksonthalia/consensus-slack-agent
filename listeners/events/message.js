@@ -1,5 +1,5 @@
-import { getStoredUserToken } from '../../consensus-core/user-token.js';
 import { runAgent } from '../../agent/index.js';
+import { getStoredUserToken } from '../../consensus-core/user-token.js';
 import { sessionStore } from '../../thread-context/index.js';
 import { buildFeedbackBlocks } from '../views/feedback-builder.js';
 
@@ -59,7 +59,14 @@ export async function handleMessage({ client, context, event, logger, say, saySt
     });
 
     // Run the agent with deps for tool access
-    const deps = { client, userId, channelId, threadTs, messageTs: event.ts, userToken: context.userToken || getStoredUserToken(userId) || undefined };
+    const deps = {
+      client,
+      userId,
+      channelId,
+      threadTs,
+      messageTs: event.ts,
+      userToken: context.userToken || getStoredUserToken(userId) || undefined,
+    };
     const { responseText, sessionId: newSessionId } = await runAgent(text, existingSessionId ?? undefined, deps);
 
     // Stream response in thread with feedback buttons

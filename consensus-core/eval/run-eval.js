@@ -85,7 +85,9 @@ async function main() {
   console.log(`Passed:                 ${results.filter((r) => r.pass).length}`);
   console.log(`TP=${tp}  FP=${fp}  TN=${tn}  FN=${fn}`);
   console.log(`Errored (hard fails):   ${erroredCount}`);
-  console.log(`Precision:              ${precision === null ? 'UNDEFINED (no predicted positives)' : precision.toFixed(3)}`);
+  console.log(
+    `Precision:              ${precision === null ? 'UNDEFINED (no predicted positives)' : precision.toFixed(3)}`,
+  );
   console.log(`Recall:                 ${recall === null ? 'UNDEFINED' : recall.toFixed(3)}`);
   console.log(`Near-miss FP count:     ${nearMissFalsePositives.length} / ${nearMiss.length}`);
   if (nearMissFalsePositives.length > 0) {

@@ -197,8 +197,7 @@ function createSqliteBackend(DatabaseSync) {
       // (redelivery). Return that existing row instead of a phantom new one.
       if (info.changes === 0) {
         const existing =
-          (row.message_ts != null ? selectByMsg.get(row.channel_id, row.message_ts) : null) ??
-          selectById.get(row.id);
+          (row.message_ts != null ? selectByMsg.get(row.channel_id, row.message_ts) : null) ?? selectById.get(row.id);
         if (existing) return /** @type {Decision} */ (existing);
       }
       return row;
@@ -316,9 +315,7 @@ function createJsonBackend() {
       // Durable dedup parity with SQLite: one decision per (channel_id, message_ts).
       // A redelivered capture returns the existing row instead of duplicating.
       if (d.message_ts != null) {
-        const existing = data.decisions.find(
-          (r) => r.channel_id === d.channel_id && r.message_ts === d.message_ts,
-        );
+        const existing = data.decisions.find((r) => r.channel_id === d.channel_id && r.message_ts === d.message_ts);
         if (existing) return existing;
       }
       /** @type {Decision} */
