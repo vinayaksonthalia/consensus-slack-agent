@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
-import { isKnownFalsePositive, recordDismissal } from '../../consensus-core/ledger.js';
+import { addDecision, isKnownFalsePositive, recordDismissal } from '../../consensus-core/ledger.js';
 
 describe('dismissal memory', () => {
   it('recordDismissal makes a re-whitespaced/re-cased variant a known false positive', () => {
@@ -42,5 +42,27 @@ describe('dismissal memory', () => {
     // chars is still distinct.
     const different = `${'padding words to grow the message well beyond five hundred characters '.repeat(12)} but this one picks Postgres instead`;
     assert.strictEqual(isKnownFalsePositive(different, decisionId), false);
+  });
+
+  it('multi-decision capture: several decisions from ONE message all persist; exact duplicate still dedups', () => {
+    const ts = `${Date.now()}.000100`;
+    const base = {
+      rationale: null,
+      channel_id: 'C_MULTI_TEST',
+      channel_name: 'multi-test',
+      decided_by: 'U1',
+      message_ts: ts,
+      permalink: null,
+      confidence: 0.95,
+      is_private: 0,
+    };
+    const a = addDecision({ ...base, statement: 'Incident postmortems are mandatory within 48 hours.' });
+    const b = addDecision({ ...base, statement: 'The status page moves to Instatus.' });
+    // Two DIFFERENT decisions from the same message must be two distinct rows.
+    assert.notStrictEqual(a.id, b.id);
+    assert.strictEqual(a.statement !== b.statement, true);
+    // The exact same (message, statement) redelivered must return the SAME row.
+    const aAgain = addDecision({ ...base, statement: 'Incident postmortems are mandatory within 48 hours.' });
+    assert.strictEqual(aAgain.id, a.id);
   });
 });

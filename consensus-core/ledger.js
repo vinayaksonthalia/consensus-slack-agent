@@ -156,7 +156,12 @@ function createSqliteBackend(DatabaseSync) {
   // rows without a ts are unaffected. Best-effort: if legacy duplicates already
   // exist the index creation fails and we simply fall back to non-unique inserts.
   try {
-    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_decisions_msg ON decisions(channel_id, message_ts)');
+    // v2 uniqueness: multi-decision capture stores SEVERAL rows per source
+    // message, so uniqueness must include the statement. Migrate away from the
+    // old (channel_id, message_ts) index which silently blocked the 2nd+
+    // decision of a message and returned the wrong existing row.
+    db.exec('DROP INDEX IF EXISTS idx_decisions_msg');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_decisions_msg_stmt ON decisions(channel_id, message_ts, statement)');
   } catch {
     // Pre-existing duplicates or older engine — dedup index is best-effort.
   }
@@ -170,7 +175,7 @@ function createSqliteBackend(DatabaseSync) {
       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectById = db.prepare('SELECT * FROM decisions WHERE id = ?');
-  const selectByMsg = db.prepare('SELECT * FROM decisions WHERE channel_id = ? AND message_ts = ?');
+  const selectByMsg = db.prepare('SELECT * FROM decisions WHERE channel_id = ? AND message_ts = ? AND statement = ?');
   const supersedeStmt = db.prepare("UPDATE decisions SET status = 'superseded' WHERE id = ?");
   const dismissStmt = db.prepare("UPDATE decisions SET status = 'dismissed' WHERE id = ?");
   const insertDismissal = db.prepare(
@@ -218,7 +223,8 @@ function createSqliteBackend(DatabaseSync) {
       // (redelivery). Return that existing row instead of a phantom new one.
       if (info.changes === 0) {
         const existing =
-          (row.message_ts != null ? selectByMsg.get(row.channel_id, row.message_ts) : null) ?? selectById.get(row.id);
+          (row.message_ts != null ? selectByMsg.get(row.channel_id, row.message_ts, row.statement) : null) ??
+          selectById.get(row.id);
         if (existing) return /** @type {Decision} */ (existing);
       }
       return row;
@@ -343,7 +349,9 @@ function createJsonBackend() {
       // Durable dedup parity with SQLite: one decision per (channel_id, message_ts).
       // A redelivered capture returns the existing row instead of duplicating.
       if (d.message_ts != null) {
-        const existing = data.decisions.find((r) => r.channel_id === d.channel_id && r.message_ts === d.message_ts);
+        const existing = data.decisions.find(
+          (r) => r.channel_id === d.channel_id && r.message_ts === d.message_ts && r.statement === d.statement,
+        );
         if (existing) return existing;
       }
       /** @type {Decision} */
