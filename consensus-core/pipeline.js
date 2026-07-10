@@ -172,6 +172,15 @@ const DECISION_KEYWORDS = [
   'default to',
   'no longer',
   'stop using',
+  'switch', // switch / switching / switched (any construction)
+  'mandat', // mandatory / mandate / mandated
+  'requir', // require / required / requirement
+  'must ',
+  'now need',
+  'sign-off', // hyphenated form of sign off
+  'effective ', // "effective August 1"
+  'starting ', // "starting next week"
+  'going forward',
 ];
 
 /**
