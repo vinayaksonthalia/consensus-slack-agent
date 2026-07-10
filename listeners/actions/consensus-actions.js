@@ -1,4 +1,13 @@
-import { dismissDecision, getDecision, recordDismissal, recordEvent, supersede } from '../../consensus-core/ledger.js';
+import { composeAuditMessage, runAuditForViewer } from '../../consensus-core/audit-report.js';
+import {
+  dismissDecision,
+  getDecision,
+  listDecisions,
+  recordAuditDismissal,
+  recordDismissal,
+  recordEvent,
+  supersede,
+} from '../../consensus-core/ledger.js';
 
 /**
  * Safely read the string `value` from an interactive action payload.
@@ -112,6 +121,89 @@ export async function handleCardSupersede({ ack, body, respond, logger }) {
     });
   } catch (e) {
     logger.error(`[consensus] handleCardSupersede failed: ${e}`);
+  }
+}
+
+/**
+ * "🔎 Run consistency audit" (App Home) → audit the whole active ledger for
+ * latent decision-vs-decision conflicts and DM the requesting user the result.
+ *
+ * App Home actions carry no channel, so we post to the user's DM (channel = user
+ * id): first an acknowledgement, then the permission-gated report.
+ * @param {import('@slack/bolt').SlackActionMiddlewareArgs & import('@slack/bolt').AllMiddlewareArgs} args
+ * @returns {Promise<void>}
+ */
+export async function handleRunAudit({ ack, body, client, logger }) {
+  await ack();
+  try {
+    const userId = /** @type {any} */ (body).user?.id;
+    if (!userId) return;
+    const activeCount = listDecisions({ status: 'active', limit: 60 }).length;
+    await client.chat.postMessage({
+      channel: userId,
+      text: `🔎 Auditing ${activeCount} active decision${activeCount === 1 ? '' : 's'} for latent conflicts…`,
+    });
+
+    const report = await runAuditForViewer({ client, userId, logger });
+    const message = composeAuditMessage(report);
+    await client.chat.postMessage({ channel: userId, ...message });
+  } catch (e) {
+    logger.error(`[consensus] handleRunAudit failed: ${e}`);
+  }
+}
+
+/**
+ * "Supersede first"/"Supersede second" on an audit conflict card → mark the
+ * chosen decision superseded and confirm (without destroying the rest of the report).
+ * @param {import('@slack/bolt').SlackActionMiddlewareArgs & import('@slack/bolt').AllMiddlewareArgs} args
+ * @returns {Promise<void>}
+ */
+export async function handleAuditSupersede({ ack, body, respond, logger }) {
+  await ack();
+  try {
+    const id = actionValue(body);
+    const decision = id ? getDecision(id) : null;
+    if (id) {
+      supersede(id, null);
+      recordEvent('superseded', id);
+    }
+    await respond({
+      replace_original: false,
+      response_type: 'ephemeral',
+      text: `✅ Marked *superseded*${decision ? `: ${decision.statement}` : ''}. That resolves the conflict — re-run the audit to confirm.`,
+    });
+  } catch (e) {
+    logger.error(`[consensus] handleAuditSupersede failed: ${e}`);
+  }
+}
+
+/**
+ * "Not a conflict" on an audit conflict card → remember the PAIR so a future
+ * audit never re-surfaces it, and confirm.
+ * @param {import('@slack/bolt').SlackActionMiddlewareArgs & import('@slack/bolt').AllMiddlewareArgs} args
+ * @returns {Promise<void>}
+ */
+export async function handleAuditDismiss({ ack, body, respond, logger }) {
+  await ack();
+  try {
+    const raw = actionValue(body);
+    /** @type {{aId?: string, bId?: string}} */
+    let parsed = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    if (parsed.aId && parsed.bId) {
+      recordAuditDismissal(parsed.aId, parsed.bId);
+    }
+    await respond({
+      replace_original: false,
+      response_type: 'ephemeral',
+      text: '👍 Noted — these two aren’t in conflict. I won’t raise this pair in future audits.',
+    });
+  } catch (e) {
+    logger.error(`[consensus] handleAuditDismiss failed: ${e}`);
   }
 }
 

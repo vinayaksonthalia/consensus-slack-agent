@@ -1,4 +1,5 @@
 import { runAgent } from '../../agent/index.js';
+import { composeAuditMessage, runAuditForViewer } from '../../consensus-core/audit-report.js';
 import { getStoredUserToken } from '../../consensus-core/user-token.js';
 import { sessionStore } from '../../thread-context/index.js';
 import { buildFeedbackBlocks } from '../views/feedback-builder.js';
@@ -23,6 +24,17 @@ export async function handleAppMentioned({ client, context, event, logger, say, 
         text: "Hey there! How can I help you? Ask me anything and I'll do my best.",
         thread_ts: threadTs,
       });
+      return;
+    }
+
+    // Consistency-audit trigger: "@Consensus audit" runs the whole-ledger latent
+    // conflict scan (permission-gated per viewer) in-thread, instead of the chat
+    // agent. Kept BEFORE runAgent so it short-circuits the normal path.
+    if (/\baudit\b/i.test(cleanedText)) {
+      await setStatus({ status: 'Auditing the decision ledger…' });
+      const report = await runAuditForViewer({ client, userId, logger });
+      const message = composeAuditMessage(report);
+      await say({ ...message, thread_ts: threadTs });
       return;
     }
 

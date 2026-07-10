@@ -1,9 +1,12 @@
 import {
+  handleAuditDismiss,
+  handleAuditSupersede,
   handleCardSupersede,
   handleConfirmSupersede,
   handleDismiss,
   handleNotDecision,
   handleReasoning,
+  handleRunAudit,
 } from './consensus-actions.js';
 import { handleFeedbackButton } from './feedback-buttons.js';
 
@@ -23,4 +26,10 @@ export function register(app) {
   // Consensus decision-card actions.
   app.action('consensus_supersede', handleCardSupersede);
   app.action('consensus_not_decision', handleNotDecision);
+
+  // Consensus workspace consistency-audit actions.
+  app.action('consensus_run_audit', handleRunAudit);
+  app.action('consensus_audit_supersede', handleAuditSupersede);
+  app.action('consensus_audit_supersede_second', handleAuditSupersede);
+  app.action('consensus_audit_dismiss', handleAuditDismiss);
 }

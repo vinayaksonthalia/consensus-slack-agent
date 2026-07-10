@@ -31,7 +31,7 @@
  * @property {number} learnedPatterns
  * @property {number|null} precisionPct
  *
- * @typedef {'alert_fired'|'dismissed'|'superseded'|'captured'} EventKind
+ * @typedef {'alert_fired'|'dismissed'|'superseded'|'captured'|'audit_run'} EventKind
  *
  * @typedef {Object} LedgerBackend
  * @property {(d: Partial<Decision> & {id: string, statement: string, channel_id: string}) => Decision} addDecision
@@ -41,6 +41,8 @@
  * @property {(id: string) => void} dismiss
  * @property {(newMessageText: string, matchedDecisionId: string) => void} recordDismissal
  * @property {(newMessageText: string, decisionId: string) => boolean} isKnownFalsePositive
+ * @property {(aId: string, bId: string) => void} recordAuditDismissal
+ * @property {(aId: string, bId: string) => boolean} isAuditPairDismissed
  * @property {(kind: EventKind, decisionId: string | null) => void} recordEvent
  * @property {() => Stats} stats
  */
@@ -76,6 +78,17 @@ function normalize(text) {
     .replace(/\s+/g, ' ')
     .replace(/[.,;:!?"'`]+/g, '')
     .trim();
+}
+
+/**
+ * Canonical key for an unordered pair of decision ids: the two ids sorted and
+ * joined with '|'. Order-insensitive so (a,b) and (b,a) map to the same key.
+ * @param {string} aId
+ * @param {string} bId
+ * @returns {string}
+ */
+export function auditPairKey(aId, bId) {
+  return [String(aId ?? ''), String(bId ?? '')].sort().join('|');
 }
 
 /**
@@ -120,6 +133,10 @@ function createSqliteBackend(DatabaseSync) {
       decision_id TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS audit_dismissals (
+      pair_key TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Idempotent migration: add is_private to decisions if an older DB predates it.
@@ -161,6 +178,10 @@ function createSqliteBackend(DatabaseSync) {
   );
   const dismissalsForDecision = db.prepare('SELECT new_message_text FROM dismissals WHERE matched_decision_id = ?');
   const insertEvent = db.prepare('INSERT INTO events (id, kind, decision_id, created_at) VALUES (?, ?, ?, ?)');
+  const insertAuditDismissal = db.prepare(
+    'INSERT OR IGNORE INTO audit_dismissals (pair_key, created_at) VALUES (?, ?)',
+  );
+  const selectAuditDismissal = db.prepare('SELECT 1 FROM audit_dismissals WHERE pair_key = ?');
 
   return {
     addDecision(d) {
@@ -237,6 +258,12 @@ function createSqliteBackend(DatabaseSync) {
       const rows = /** @type {{new_message_text: string}[]} */ (dismissalsForDecision.all(decisionId));
       return rows.some((r) => normalize(r.new_message_text) === target);
     },
+    recordAuditDismissal(aId, bId) {
+      insertAuditDismissal.run(auditPairKey(aId, bId), new Date().toISOString());
+    },
+    isAuditPairDismissed(aId, bId) {
+      return selectAuditDismissal.get(auditPairKey(aId, bId)) != null;
+    },
     recordEvent(kind, decisionId) {
       insertEvent.run(randomUUID(), kind, decisionId ?? null, new Date().toISOString());
     },
@@ -294,14 +321,15 @@ function createJsonBackend() {
   // Lazy require to avoid top-level fs when sqlite is available.
   const fs = require('node:fs');
 
-  /** @returns {{decisions: Decision[], dismissals: {id: string, new_message_text: string, matched_decision_id: string, dismissed_at: string}[], events: {id: string, kind: string, decision_id: string|null, created_at: string}[]}} */
+  /** @returns {{decisions: Decision[], dismissals: {id: string, new_message_text: string, matched_decision_id: string, dismissed_at: string}[], events: {id: string, kind: string, decision_id: string|null, created_at: string}[], auditDismissals: {pair_key: string, created_at: string}[]}} */
   function load() {
     try {
       const data = JSON.parse(fs.readFileSync(JSON_PATH, 'utf8'));
       if (!Array.isArray(data.events)) data.events = [];
+      if (!Array.isArray(data.auditDismissals)) data.auditDismissals = [];
       return data;
     } catch {
-      return { decisions: [], dismissals: [], events: [] };
+      return { decisions: [], dismissals: [], events: [], auditDismissals: [] };
     }
   }
   /** @param {ReturnType<typeof load>} data */
@@ -377,6 +405,18 @@ function createJsonBackend() {
       return load()
         .dismissals.filter((r) => r.matched_decision_id === decisionId)
         .some((r) => normalize(r.new_message_text) === target);
+    },
+    recordAuditDismissal(aId, bId) {
+      const data = load();
+      const key = auditPairKey(aId, bId);
+      if (!data.auditDismissals.some((r) => r.pair_key === key)) {
+        data.auditDismissals.push({ pair_key: key, created_at: new Date().toISOString() });
+        save(data);
+      }
+    },
+    isAuditPairDismissed(aId, bId) {
+      const key = auditPairKey(aId, bId);
+      return load().auditDismissals.some((r) => r.pair_key === key);
     },
     recordEvent(kind, decisionId) {
       const data = load();
@@ -489,7 +529,28 @@ export function isKnownFalsePositive(newMessageText, decisionId) {
 }
 
 /**
- * Record a learning-loop event (alert_fired | dismissed | superseded | captured).
+ * Record a user-confirmed "not a conflict" verdict for a decision PAIR (from the
+ * consistency audit), so the pair is never re-surfaced by a future audit.
+ * @param {string} aId
+ * @param {string} bId
+ * @returns {void}
+ */
+export function recordAuditDismissal(aId, bId) {
+  backend.recordAuditDismissal(aId, bId);
+}
+
+/**
+ * Whether this decision pair was previously dismissed as not-a-conflict in an audit.
+ * @param {string} aId
+ * @param {string} bId
+ * @returns {boolean}
+ */
+export function isAuditPairDismissed(aId, bId) {
+  return backend.isAuditPairDismissed(aId, bId);
+}
+
+/**
+ * Record a learning-loop event (alert_fired | dismissed | superseded | captured | audit_run).
  * @param {EventKind} kind
  * @param {string | null} [decisionId]
  * @returns {void}

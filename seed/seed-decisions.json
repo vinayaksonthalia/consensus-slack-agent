@@ -222,5 +222,33 @@
     "confidence": 0.97,
     "created_at": "2026-07-09T16:35:57.183Z",
     "is_private": 0
+  },
+  {
+    "id": "d09201ba-b1e6-47c6-9767-d9bce0599d31",
+    "statement": "Sales may commit to API v1 support for enterprise renewals through December 2026.",
+    "rationale": null,
+    "channel_id": "C0BG3JF1URZ",
+    "channel_name": "acct-omega",
+    "decided_by": "U0BGDH6LL6Q",
+    "message_ts": "1783628701.334019",
+    "permalink": "https://e0bfuerrslf-v43c7r6r.slack.com/archives/C0BG3JF1URZ/p1783628701334019",
+    "status": "active",
+    "confidence": 0.96,
+    "created_at": "2026-07-09T20:25:41.812Z",
+    "is_private": 0
+  },
+  {
+    "id": "ea11985d-0c26-48a3-9dca-c53d82d6fe91",
+    "statement": "The rebrand launch announcement is scheduled for August 25.",
+    "rationale": null,
+    "channel_id": "C0BH4646ZT2",
+    "channel_name": "campaign-nto",
+    "decided_by": "U0BGDH6LL6Q",
+    "message_ts": "1783628744.881209",
+    "permalink": "https://e0bfuerrslf-v43c7r6r.slack.com/archives/C0BH4646ZT2/p1783628744881209",
+    "status": "active",
+    "confidence": 0.95,
+    "created_at": "2026-07-09T20:26:24.559Z",
+    "is_private": 0
   }
 ]

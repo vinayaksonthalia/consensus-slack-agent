@@ -16,6 +16,7 @@ Built for the **Slack Agent Builder Challenge 2026** (Track 1: Best New Slack Ag
 - **Permission-aware by construction** — if the conflicting decision lives in a private channel the author can't see, the alert is **redacted**: the conflict is flagged, but no statement, channel, or link is revealed. Membership checked per alert, fail-closed. The App Home decision log is permission-filtered per viewer too.
 - **Provenance on demand** — ask `@Consensus why did we choose Postgres?` and get the real ledger entry with the original thread as proof, augmented by Slack's **Real-Time Search API** (`[ledger]` vs `[live search]` results are never conflated).
 - **It learns** — every *Not a conflict* becomes persistent false-positive memory; precision is tracked on the App Home dashboard.
+- **Consistency audit** — On demand, Consensus X-rays the whole ledger and surfaces latent contradictions — pairs of standing decisions that already conflict without anyone noticing — permission-filtered per viewer.
 
 ## Measured, not claimed
 

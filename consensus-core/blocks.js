@@ -162,10 +162,10 @@ function statusEmoji(status) {
 
 /**
  * App Home dashboard view.
- * @param {{stats: import('./ledger.js').Stats, decisions: Decision[]}} args
+ * @param {{stats: import('./ledger.js').Stats, decisions: Decision[], lastAudit?: import('./audit.js').LastAuditSummary | null}} args
  * @returns {import('@slack/types').HomeView}
  */
-export function homeView({ stats, decisions }) {
+export function homeView({ stats, decisions, lastAudit = null }) {
   const precision = stats.precisionPct === null || stats.precisionPct === undefined ? '—' : `${stats.precisionPct}%`;
   const confirmed = stats.superseded;
 
@@ -180,6 +180,28 @@ export function homeView({ stats, decisions }) {
       fields: [
         { type: 'mrkdwn', text: `*Active decisions*\n${stats.activeDecisions}` },
         { type: 'mrkdwn', text: `*Total captured*\n${stats.captured}` },
+      ],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '🔎 Run consistency audit', emoji: true },
+          action_id: 'consensus_run_audit',
+          style: 'primary',
+        },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: lastAudit
+            ? `Last audit: ${shortDate(lastAudit.at)} · ${lastAudit.checkedCount} checked · ${lastAudit.confirmedCount} latent conflict${lastAudit.confirmedCount === 1 ? '' : 's'} found`
+            : 'X-ray the whole ledger for standing decisions that already contradict each other.',
+        },
       ],
     },
     { type: 'divider' },
@@ -256,4 +278,99 @@ export function homeView({ stats, decisions }) {
   });
 
   return { type: 'home', blocks };
+}
+
+/**
+ * Render one decision as a "statement (channel, date, link)" mrkdwn fragment for
+ * an audit conflict card.
+ * @param {Decision} d
+ * @returns {string}
+ */
+function auditDecisionLine(d) {
+  const where = d.channel_name ? `#${d.channel_name}` : 'a channel';
+  const link = d.permalink ? ` · <${d.permalink}|view>` : '';
+  return `*${sanitizeMrkdwn(d.statement, 300)}*\n_${where} · ${shortDate(d.created_at)}${link}_`;
+}
+
+/**
+ * Block Kit blocks for a consistency-audit report: an intro line, one card per
+ * confirmed latent conflict (with Supersede-first / Supersede-second / Not-a-conflict
+ * buttons), and an optional trailing line counting conflicts hidden behind private
+ * channels the viewer can't access.
+ *
+ * @param {{
+ *   confirmed: import('./audit.js').ConfirmedConflict[],
+ *   checkedCount: number,
+ *   hiddenPrivateCount?: number
+ * }} args
+ * @returns {import('@slack/types').KnownBlock[]}
+ */
+export function auditConflictBlocks({ confirmed, checkedCount, hiddenPrivateCount = 0 }) {
+  /** @type {import('@slack/types').KnownBlock[]} */
+  const blocks = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🔎 *Consistency audit* — ${checkedCount} active decision${checkedCount === 1 ? '' : 's'} checked, *${confirmed.length}* latent conflict${confirmed.length === 1 ? '' : 's'} found.`,
+      },
+    },
+  ];
+
+  for (const { a, b, reasoning } of confirmed) {
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `⚠️ *Latent conflict:*\n${auditDecisionLine(a)}\n\n*vs*\n\n${auditDecisionLine(b)}`,
+      },
+    });
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `🧠 ${sanitizeMrkdwn(reasoning || 'No reasoning provided.', 300)}` }],
+    });
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Supersede first', emoji: true },
+          action_id: 'consensus_audit_supersede',
+          value: a.id,
+          style: 'primary',
+        },
+        {
+          // Distinct action_id (Slack requires uniqueness within an actions
+          // block); routed to the same handler as "Supersede first".
+          type: 'button',
+          text: { type: 'plain_text', text: 'Supersede second', emoji: true },
+          action_id: 'consensus_audit_supersede_second',
+          value: b.id,
+          style: 'primary',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Not a conflict', emoji: true },
+          action_id: 'consensus_audit_dismiss',
+          value: JSON.stringify({ aId: a.id, bId: b.id }),
+        },
+      ],
+    });
+  }
+
+  if (hiddenPrivateCount > 0) {
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `🔒 ${hiddenPrivateCount} additional conflict${hiddenPrivateCount === 1 ? '' : 's'} exist involving private channels you don't have access to.`,
+        },
+      ],
+    });
+  }
+
+  return blocks;
 }

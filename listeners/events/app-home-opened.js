@@ -1,3 +1,4 @@
+import { getLastAudit } from '../../consensus-core/audit.js';
 import { homeView } from '../../consensus-core/blocks.js';
 import { listDecisions, stats } from '../../consensus-core/ledger.js';
 import { canSeeDecision } from '../../consensus-core/permissions.js';
@@ -48,7 +49,7 @@ export async function handleAppHomeOpened({ client, event, context, logger }) {
     }
 
     // Render the Consensus dashboard from live ledger data.
-    const view = homeView({ stats: stats(), decisions: visible });
+    const view = homeView({ stats: stats(), decisions: visible, lastAudit: getLastAudit() });
     await client.views.publish({ user_id: userId, view });
   } catch (e) {
     logger.error(`Failed to handle app_home_opened: ${e}`);
