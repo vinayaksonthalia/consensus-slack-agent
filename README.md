@@ -1,5 +1,10 @@
 # 🛡️ Consensus — workspace consistency guardian
 
+[![CI](https://github.com/vinayaksonthalia/consensus-slack-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/vinayaksonthalia/consensus-slack-agent/actions/workflows/ci.yml)
+[![Eval](https://img.shields.io/badge/eval-P%201.000%20%C2%B7%20R%200.960%20%C2%B7%2055%20cases-brightgreen)](consensus-core/eval/EVAL-RESULTS.txt)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Slack Platform](https://img.shields.io/badge/Slack-Agents%20%C2%B7%20MCP%20%C2%B7%20RTS-4A154B?logo=slack)](https://docs.slack.dev/ai/)
+
 **Catch it before it ships wrong.** Consensus is an ambient Slack agent that notices when your team makes a decision, remembers it with full provenance, and warns anyone about to contradict it — live, across channels, permission-aware.
 
 Built for the **Slack Agent Builder Challenge 2026** (Track 1: Best New Slack Agent).
@@ -29,6 +34,8 @@ Full output: [`consensus-core/eval/EVAL-RESULTS.txt`](consensus-core/eval/EVAL-R
 - **Slack MCP Server** — search/read/write tools available to the agent brain
 
 ## Architecture
+
+![Architecture](docs/images/architecture.png)
 
 ```
 Events API ──▶ pre-filter (dedup · length · keywords) ──▶ decision classifier (LLM) ──▶ Decision Ledger (SQLite)
