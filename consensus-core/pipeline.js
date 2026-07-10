@@ -25,7 +25,7 @@ const DECISION_MIN_CONFIDENCE = 0.7;
 const CONTRADICTION_MIN_CONFIDENCE = 0.75;
 
 // Cap the number of contradiction candidates handed to the judge.
-const MAX_CANDIDATES = 15;
+const MAX_CANDIDATES = 50;
 
 /**
  * In-memory LRU of recently processed event ids (client_msg_id or ts). Slack
