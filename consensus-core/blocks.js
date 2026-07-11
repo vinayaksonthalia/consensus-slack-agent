@@ -3,6 +3,8 @@
  * contradiction alert, and the App Home dashboard.
  */
 
+import { isExpired } from './governance.js';
+
 /**
  * @typedef {import('./ledger.js').Decision} Decision
  */
@@ -74,6 +76,24 @@ export function lifecycleBadge(status) {
 }
 
 /**
+ * Expiry-aware lifecycle badge. When a decision has passed its `expires_at`,
+ * render Expired (⏳) REGARDLESS of the stored status — expiry is computed live
+ * via governance.isExpired, so a decision reads as expired the moment its date
+ * passes even though no scheduled sweep has flipped the stored status to the
+ * literal `expired` yet (see governance.materializeExpired for that Phase-2 job).
+ * A row already stored as `expired` still renders via lifecycleBadge's ⌛ case;
+ * this ⏳ path specifically covers the "expired by date, status not yet flipped"
+ * case. Otherwise defers to {@link lifecycleBadge}.
+ * @param {Pick<Decision, 'status' | 'expires_at'> | null | undefined} decision
+ * @param {number} [now] epoch ms
+ * @returns {{emoji: string, label: string}}
+ */
+export function badgeFor(decision, now = Date.now()) {
+  if (decision && isExpired(decision, now)) return { emoji: '⏳', label: 'Expired' };
+  return lifecycleBadge(decision?.status ?? 'active');
+}
+
+/**
  * Lifecycle action buttons appropriate to a decision's current state. Proposed
  * decisions can be Confirmed / Rejected / Marked-exception / Superseded; already
  * enforceable ones (active/confirmed) can be narrowed to an exception or
@@ -123,12 +143,23 @@ function lifecycleActions(status, id) {
 /**
  * Compact "Decision captured" card, posted in-thread. Shows the lifecycle state
  * (badge) and the owner, and renders lifecycle actions appropriate to the state.
- * @param {{statement: string, decidedBy?: string|null, channelName?: string|null, permalink?: string|null, id: string, status?: Decision['status'], ownerUserId?: string|null}} args
+ * When `expiresAt` is in the past the badge renders Expired (⏳) even if the
+ * stored status has not yet been flipped (see {@link badgeFor}).
+ * @param {{statement: string, decidedBy?: string|null, channelName?: string|null, permalink?: string|null, id: string, status?: Decision['status'], ownerUserId?: string|null, expiresAt?: string|null}} args
  * @returns {import('@slack/types').KnownBlock[]}
  */
-export function decisionCard({ statement, decidedBy, channelName, permalink, id, status = 'active', ownerUserId }) {
+export function decisionCard({
+  statement,
+  decidedBy,
+  channelName,
+  permalink,
+  id,
+  status = 'active',
+  ownerUserId,
+  expiresAt = null,
+}) {
   const where = channelName ? `#${channelName}` : 'this channel';
-  const badge = lifecycleBadge(status);
+  const badge = badgeFor({ status, expires_at: expiresAt });
   const owner = ownerUserId ?? decidedBy;
   const header = status === 'proposed' ? '📝 Proposed decision' : '📌 Decision captured';
   const contextText =
@@ -226,11 +257,6 @@ export function contradictionAlert({ newMessageText, decision, confidence, reaso
   ];
 }
 
-/** @param {Decision['status']} status */
-function statusEmoji(status) {
-  return lifecycleBadge(status).emoji;
-}
-
 /**
  * App Home dashboard view.
  * @param {{stats: import('./ledger.js').Stats, decisions: Decision[], lastAudit?: import('./audit.js').LastAuditSummary | null}} args
@@ -320,7 +346,7 @@ export function homeView({ stats, decisions, lastAudit = null }) {
   } else {
     for (const d of decisions.slice(0, 15)) {
       const where = d.channel_name ? `#${d.channel_name}` : 'channel';
-      const line = `${statusEmoji(d.status)} *${sanitizeMrkdwn(d.statement, 300)}*`;
+      const line = `${badgeFor(d).emoji} *${sanitizeMrkdwn(d.statement, 300)}*`;
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: line },
@@ -353,14 +379,18 @@ export function homeView({ stats, decisions, lastAudit = null }) {
 
 /**
  * Render one decision as a "statement (channel, date, link)" mrkdwn fragment for
- * an audit conflict card.
+ * an audit conflict card. A decision past its `expires_at` is prefixed with an
+ * ⏳ Expired badge (computed live via {@link badgeFor}) even if its stored status
+ * has not been flipped to the literal `expired`.
  * @param {Decision} d
+ * @param {number} [now] epoch ms
  * @returns {string}
  */
-function auditDecisionLine(d) {
+function auditDecisionLine(d, now = Date.now()) {
   const where = d.channel_name ? `#${d.channel_name}` : 'a channel';
   const link = d.permalink ? ` · <${d.permalink}|view>` : '';
-  return `*${sanitizeMrkdwn(d.statement, 300)}*\n_${where} · ${shortDate(d.created_at)}${link}_`;
+  const expiredTag = isExpired(d, now) ? '⏳ *Expired* · ' : '';
+  return `*${sanitizeMrkdwn(d.statement, 300)}*\n_${expiredTag}${where} · ${shortDate(d.created_at)}${link}_`;
 }
 
 /**

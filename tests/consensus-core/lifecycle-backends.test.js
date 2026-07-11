@@ -60,6 +60,32 @@ for (const [name, backend] of backends) {
       assert.strictEqual(d.expires_at, null);
       assert.strictEqual(d.owner_user_id, null);
       assert.strictEqual(d.authority_level, null);
+      assert.strictEqual(d.exception_of, null);
+    });
+
+    it('persists exception_of (parent link) and defaults it to null', () => {
+      // An exception carving out of an explicit parent.
+      const child = backend.addDecision({
+        id: `d-${name}-exc`,
+        statement: 'EU tenants keep data in-region.',
+        channel_id: 'C1',
+        status: 'exception',
+        applies_to: 'EU tenants',
+        exception_of: `d-${name}-parent`,
+      });
+      assert.strictEqual(child.exception_of, `d-${name}-parent`);
+      assert.strictEqual(child.applies_to, 'EU tenants');
+      assert.strictEqual(backend.getDecision(child.id).exception_of, `d-${name}-parent`);
+
+      // A self-exception (the Phase-1 handler path) leaves exception_of null.
+      const self = backend.addDecision({
+        id: `d-${name}-selfexc`,
+        statement: 'This standing item is a carve-out.',
+        channel_id: 'C1',
+        status: 'exception',
+      });
+      assert.strictEqual(self.exception_of, null);
+      assert.strictEqual(backend.getDecision(self.id).exception_of, null);
     });
 
     it('setStatus persists confirmed / rejected / exception transitions', () => {
@@ -123,6 +149,7 @@ describe('JSON backend migrate-on-load: legacy dismissed → rejected', () => {
     assert.strictEqual(rejected.status, 'rejected', 'legacy dismissed maps to rejected');
     assert.strictEqual(rejected.team_label, null, 'missing new fields backfill to null');
     assert.strictEqual(rejected.owner_user_id, null);
+    assert.strictEqual(rejected.exception_of, null, 'exception_of backfills to null on load');
 
     assert.strictEqual(backend.getDecision('legacy2').status, 'active', 'active is unchanged');
 

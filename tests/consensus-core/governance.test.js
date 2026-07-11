@@ -6,8 +6,11 @@ import {
   captureStatusForChannel,
   isEnforceable,
   isExpired,
+  isStrict,
   isTrustedChannel,
   mapLegacyStatus,
+  materializeExpired,
+  narrowsScope,
   parseIdList,
 } from '../../consensus-core/governance.js';
 
@@ -102,6 +105,131 @@ describe('isExpired / isEnforceable', () => {
   it('tolerates null/undefined decisions', () => {
     assert.strictEqual(isEnforceable(null, NOW), false);
     assert.strictEqual(isEnforceable(undefined, NOW), false);
+  });
+});
+
+describe('isStrict', () => {
+  it('is false when unset or explicitly falsey (lenient/demo default)', () => {
+    assert.strictEqual(isStrict({}), false);
+    assert.strictEqual(isStrict({ CONSENSUS_GOVERNANCE_STRICT: '' }), false);
+    assert.strictEqual(isStrict({ CONSENSUS_GOVERNANCE_STRICT: 'false' }), false);
+    assert.strictEqual(isStrict({ CONSENSUS_GOVERNANCE_STRICT: '0' }), false);
+    assert.strictEqual(isStrict({ CONSENSUS_GOVERNANCE_STRICT: 'nope' }), false);
+  });
+
+  it('is true for the usual truthy spellings (case-insensitive)', () => {
+    for (const v of ['1', 'true', 'TRUE', 'yes', 'On', ' true ']) {
+      assert.strictEqual(isStrict({ CONSENSUS_GOVERNANCE_STRICT: v }), true, `${v} should be strict`);
+    }
+  });
+});
+
+describe('strict mode — trusted channels', () => {
+  it('lenient (default): unset trusted list trusts EVERY channel', () => {
+    assert.strictEqual(isTrustedChannel('C_ANY', {}), true);
+    assert.strictEqual(captureStatusForChannel('C_ANY', {}), 'active');
+  });
+
+  it('strict: unset trusted list trusts NO channel (captures are proposed)', () => {
+    const env = { CONSENSUS_GOVERNANCE_STRICT: 'true' };
+    assert.strictEqual(isTrustedChannel('C_ANY', env), false);
+    assert.strictEqual(isTrustedChannel('C_OTHER', env), false);
+    assert.strictEqual(captureStatusForChannel('C_ANY', env), 'proposed');
+  });
+
+  it('strict: an explicitly listed channel is still trusted', () => {
+    const env = { CONSENSUS_GOVERNANCE_STRICT: '1', CONSENSUS_TRUSTED_CHANNELS: 'C_TRUSTED' };
+    assert.strictEqual(isTrustedChannel('C_TRUSTED', env), true);
+    assert.strictEqual(isTrustedChannel('C_OTHER', env), false);
+    assert.strictEqual(captureStatusForChannel('C_TRUSTED', env), 'active');
+  });
+
+  it('set-but-empty is a lockdown in BOTH modes', () => {
+    assert.strictEqual(isTrustedChannel('C_ANY', { CONSENSUS_TRUSTED_CHANNELS: '' }), false);
+    assert.strictEqual(
+      isTrustedChannel('C_ANY', { CONSENSUS_TRUSTED_CHANNELS: '', CONSENSUS_GOVERNANCE_STRICT: 'true' }),
+      false,
+    );
+  });
+});
+
+describe('strict mode — confirm authority', () => {
+  it('lenient (default): unset/empty authority list authorizes EVERYONE', () => {
+    assert.strictEqual(canConfirm('U_ANY', {}), true);
+    assert.strictEqual(canConfirm('U_ANY', { CONSENSUS_AUTHORITY_USERS: '' }), true);
+    assert.strictEqual(canConfirm(null, {}), true);
+  });
+
+  it('strict: unset/empty authority list authorizes NO ONE', () => {
+    assert.strictEqual(canConfirm('U_ANY', { CONSENSUS_GOVERNANCE_STRICT: 'true' }), false);
+    assert.strictEqual(
+      canConfirm('U_ANY', { CONSENSUS_GOVERNANCE_STRICT: 'true', CONSENSUS_AUTHORITY_USERS: '' }),
+      false,
+    );
+    assert.strictEqual(canConfirm(null, { CONSENSUS_GOVERNANCE_STRICT: 'true' }), false);
+  });
+
+  it('strict: an explicitly listed user is still authorized', () => {
+    const env = { CONSENSUS_GOVERNANCE_STRICT: '1', CONSENSUS_AUTHORITY_USERS: 'U_ADMIN' };
+    assert.strictEqual(canConfirm('U_ADMIN', env), true);
+    assert.strictEqual(canConfirm('U_RANDOM', env), false);
+  });
+});
+
+describe('narrowsScope (Phase-1 conservative stub)', () => {
+  it('returns false — Phase 1 does not model parent-linked scope narrowing', () => {
+    const parent = { id: 'p1', applies_to: 'all tenants' };
+    const exception = { status: 'exception', exception_of: null, applies_to: 'EU tenants' };
+    assert.strictEqual(narrowsScope(exception, parent), false);
+    // Even a (future-shaped) parent-linked exception is conservatively false today.
+    assert.strictEqual(narrowsScope({ ...exception, exception_of: 'p1' }, parent), false);
+    assert.strictEqual(narrowsScope(null, null), false);
+  });
+});
+
+describe('materializeExpired', () => {
+  const NOW = Date.parse('2026-07-11T00:00:00.000Z');
+  const past = '2026-07-01T00:00:00.000Z';
+  const future = '2999-01-01T00:00:00.000Z';
+
+  it('returns exactly the past-expiry active/confirmed ids', () => {
+    const decisions = [
+      { id: 'a', status: 'active', expires_at: past }, // ← flip
+      { id: 'c', status: 'confirmed', expires_at: past }, // ← flip
+      { id: 'active-future', status: 'active', expires_at: future }, // not yet
+      { id: 'active-none', status: 'active', expires_at: null }, // never
+      { id: 'proposed-past', status: 'proposed', expires_at: past }, // not enforceable
+      { id: 'exception-past', status: 'exception', expires_at: past }, // not enforceable
+      { id: 'superseded-past', status: 'superseded', expires_at: past },
+      { id: 'expired-past', status: 'expired', expires_at: past }, // already flipped
+    ];
+    assert.deepStrictEqual(materializeExpired(decisions, NOW).sort(), ['a', 'c']);
+  });
+
+  it('converges: a second pass over the flipped rows returns nothing', () => {
+    const flipped = [
+      { id: 'a', status: 'expired', expires_at: past },
+      { id: 'c', status: 'expired', expires_at: past },
+    ];
+    assert.deepStrictEqual(materializeExpired(flipped, NOW), []);
+  });
+
+  it('tolerates non-array / empty input', () => {
+    assert.deepStrictEqual(materializeExpired(/** @type {any} */ (null), NOW), []);
+    assert.deepStrictEqual(materializeExpired([], NOW), []);
+  });
+});
+
+describe('exception is never an alert/audit candidate', () => {
+  const NOW = Date.parse('2026-07-11T00:00:00.000Z');
+  it('isEnforceable excludes exception regardless of expiry', () => {
+    assert.strictEqual(isEnforceable({ status: 'exception', expires_at: null }, NOW), false);
+    assert.strictEqual(isEnforceable({ status: 'exception', expires_at: '2999-01-01T00:00:00.000Z' }, NOW), false);
+    // materializeExpired also never selects an exception, so a sweep can't resurrect it.
+    assert.deepStrictEqual(
+      materializeExpired([{ id: 'x', status: 'exception', expires_at: '2026-07-01T00:00:00.000Z' }], NOW),
+      [],
+    );
   });
 });
 

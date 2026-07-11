@@ -670,6 +670,7 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
               id: decision.id,
               status: decision.status,
               ownerUserId: decision.owner_user_id,
+              expiresAt: decision.expires_at,
             }),
           });
         } catch (e) {
@@ -921,6 +922,7 @@ async function runEditPipeline({ event, client, logger }) {
               id: decision.id,
               status: decision.status,
               ownerUserId: decision.owner_user_id,
+              expiresAt: decision.expires_at,
             }),
           });
         } catch (e) {

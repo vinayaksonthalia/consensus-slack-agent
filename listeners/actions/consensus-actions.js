@@ -141,6 +141,7 @@ async function replaceWithCard(respond, decision, noticeText) {
       id: decision.id,
       status: decision.status,
       ownerUserId: decision.owner_user_id,
+      expiresAt: decision.expires_at,
     }),
   });
 }
@@ -227,8 +228,21 @@ export async function handleReject({ ack, body, respond, logger }) {
 }
 
 /**
- * "Mark exception" on a decision card → mark it `exception` (a scoped carve-out
- * that narrows scope and is NOT globally enforced). Authority-gated.
+ * "Mark exception" on a decision card → mark it `exception` (a carve-out that is
+ * NOT globally enforced). Authority-gated.
+ *
+ * Phase-1 SEMANTICS (self-exception): this transitions the SAME decision to
+ * status `exception`, leaving `exception_of` null. The meaning is "this standing
+ * item is actually a carve-out — don't enforce it globally". Because `exception`
+ * is excluded from ENFORCEABLE_STATUSES (see governance.isEnforceable), the row
+ * immediately stops being an alert/audit candidate. No new row is created.
+ *
+ * PHASE-2 TODO: model an exception as a SEPARATE entry that references a distinct
+ * parent policy via the `exception_of` column (already migrated on both backends)
+ * and narrows it via an `applies_to` scope note — see governance.narrowsScope for
+ * the intended predicate. That richer "exception references a distinct parent"
+ * model is intentionally NOT built here; this handler only does the tractable
+ * self-exception so nothing is over-claimed.
  * @param {import('@slack/bolt').SlackActionMiddlewareArgs & import('@slack/bolt').AllMiddlewareArgs} args
  * @returns {Promise<void>}
  */

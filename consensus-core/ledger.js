@@ -24,6 +24,10 @@
  * @property {string|null} expires_at ISO-8601; when set and in the past the decision is treated as expired.
  * @property {string|null} owner_user_id
  * @property {string|null} authority_level e.g. 'policy' | 'project' | 'preference'
+ * @property {string|null} exception_of id of the parent decision this row carves an
+ *   exception out of. Null for a self-exception (a standing item annotated as a
+ *   non-enforced carve-out) and for every non-exception row. See governance.narrowsScope
+ *   for the intended Phase-2 parent-linked semantics.
  *
  * @typedef {Object} Stats
  * @property {number} active
@@ -135,7 +139,8 @@ export function createSqliteBackend(DatabaseSync, dbPath = DB_PATH) {
       applies_to TEXT,
       expires_at TEXT,
       owner_user_id TEXT,
-      authority_level TEXT
+      authority_level TEXT,
+      exception_of TEXT
     );
     CREATE TABLE IF NOT EXISTS dismissals (
       id TEXT PRIMARY KEY,
@@ -174,7 +179,7 @@ export function createSqliteBackend(DatabaseSync, dbPath = DB_PATH) {
   try {
     const cols = /** @type {{name: string}[]} */ (db.prepare('PRAGMA table_info(decisions)').all());
     const have = new Set(cols.map((c) => c.name));
-    for (const col of ['team_label', 'applies_to', 'expires_at', 'owner_user_id', 'authority_level']) {
+    for (const col of ['team_label', 'applies_to', 'expires_at', 'owner_user_id', 'authority_level', 'exception_of']) {
       if (!have.has(col)) db.exec(`ALTER TABLE decisions ADD COLUMN ${col} TEXT`);
     }
   } catch {
@@ -228,9 +233,9 @@ export function createSqliteBackend(DatabaseSync, dbPath = DB_PATH) {
   // than a thrown unique-constraint error; addDecision then returns the existing row.
   const insertDecision = db.prepare(`
     INSERT OR IGNORE INTO decisions
-      (id, statement, rationale, channel_id, channel_name, decided_by, message_ts, permalink, status, confidence, created_at, is_private, team_label, applies_to, expires_at, owner_user_id, authority_level)
+      (id, statement, rationale, channel_id, channel_name, decided_by, message_ts, permalink, status, confidence, created_at, is_private, team_label, applies_to, expires_at, owner_user_id, authority_level, exception_of)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const selectById = db.prepare('SELECT * FROM decisions WHERE id = ?');
   const selectByMsg = db.prepare('SELECT * FROM decisions WHERE channel_id = ? AND message_ts = ? AND statement = ?');
@@ -276,6 +281,7 @@ export function createSqliteBackend(DatabaseSync, dbPath = DB_PATH) {
         expires_at: d.expires_at ?? null,
         owner_user_id: d.owner_user_id ?? null,
         authority_level: d.authority_level ?? null,
+        exception_of: d.exception_of ?? null,
       };
       const info = insertDecision.run(
         row.id,
@@ -295,6 +301,7 @@ export function createSqliteBackend(DatabaseSync, dbPath = DB_PATH) {
         row.expires_at,
         row.owner_user_id,
         row.authority_level,
+        row.exception_of,
       );
       // Ignored insert → a row for this (channel_id, message_ts) already exists
       // (redelivery). Return that existing row instead of a phantom new one.
@@ -449,6 +456,7 @@ export function createJsonBackend(jsonPath = JSON_PATH) {
           if (r.expires_at === undefined) r.expires_at = null;
           if (r.owner_user_id === undefined) r.owner_user_id = null;
           if (r.authority_level === undefined) r.authority_level = null;
+          if (r.exception_of === undefined) r.exception_of = null;
         }
       }
       return data;
@@ -491,6 +499,7 @@ export function createJsonBackend(jsonPath = JSON_PATH) {
         expires_at: d.expires_at ?? null,
         owner_user_id: d.owner_user_id ?? null,
         authority_level: d.authority_level ?? null,
+        exception_of: d.exception_of ?? null,
       };
       data.decisions.push(row);
       save(data);
