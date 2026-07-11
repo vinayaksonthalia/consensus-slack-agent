@@ -1,7 +1,12 @@
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { checkRateWindow, isQueueFull, looksLikeQuestion } from '../../consensus-core/pipeline.js';
+import {
+  capturesAllowedToday,
+  checkRateWindow,
+  isQueueFull,
+  looksLikeQuestion,
+} from '../../consensus-core/pipeline.js';
 
 describe('looksLikeQuestion', () => {
   it('treats a trailing question mark as a question', () => {
@@ -50,6 +55,32 @@ describe('checkRateWindow (token bucket)', () => {
       allowed: true,
       recent: [],
     });
+  });
+});
+
+describe('capturesAllowedToday (daily per-user capture cap)', () => {
+  it('allows the full batch when the author is well under the cap', () => {
+    // Author has 0 today, wants 3, cap 20 → all 3 allowed.
+    assert.strictEqual(capturesAllowedToday(0, 3), 3);
+    assert.strictEqual(capturesAllowedToday(5, 4), 4);
+  });
+
+  it('allows only the remaining slots when the batch would cross the cap', () => {
+    // 18 already today, wants 5, cap 20 → only 2 fit.
+    assert.strictEqual(capturesAllowedToday(18, 5), 2);
+    // Exactly at the boundary: 19 today, wants 3 → 1 fits.
+    assert.strictEqual(capturesAllowedToday(19, 3), 1);
+  });
+
+  it('allows nothing once the author is at or over the cap', () => {
+    assert.strictEqual(capturesAllowedToday(20, 4), 0);
+    assert.strictEqual(capturesAllowedToday(25, 4), 0); // over cap never goes negative
+  });
+
+  it('honors a custom cap and tolerates non-numeric input', () => {
+    assert.strictEqual(capturesAllowedToday(2, 5, 3), 1);
+    assert.strictEqual(capturesAllowedToday(/** @type {any} */ (undefined), 3, 3), 3);
+    assert.strictEqual(capturesAllowedToday(1, /** @type {any} */ (null), 3), 0);
   });
 });
 

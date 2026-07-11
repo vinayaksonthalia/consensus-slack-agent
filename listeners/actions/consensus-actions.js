@@ -44,8 +44,12 @@ export async function handleDismiss({ ack, body, respond, logger }) {
     // button value), not the alert's own rendered text — otherwise
     // isKnownFalsePositive would never match and the alert would re-fire.
     const messageText = parsed.text || '';
+    // Scope the dismissal to the clicking user (per-user memory kills the
+    // dismissal-poisoning vector — see ledger.recordDismissal). The alert is
+    // ephemeral, so the clicker is always the alerted author.
+    const userId = /** @type {any} */ (body).user?.id ?? null;
     if (parsed.decisionId) {
-      recordDismissal(messageText, parsed.decisionId);
+      recordDismissal(messageText, parsed.decisionId, userId);
       recordEvent('dismissed', parsed.decisionId);
     }
     await respond({

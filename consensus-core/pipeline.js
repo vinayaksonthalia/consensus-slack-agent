@@ -15,6 +15,7 @@ import { contradictionAlert, decisionCard } from './blocks.js';
 import { classifyDecisions, judgeContradiction } from './judge.js';
 import {
   addDecision,
+  countDecisionsByAuthorSince,
   isKnownFalsePositive,
   listDecisions,
   listDecisionsByMessage,
@@ -36,6 +37,43 @@ const MAX_CANDIDATES = 50;
 
 // Cap the number of decisions captured from a single message.
 const MAX_CAPTURES_PER_MESSAGE = 5;
+
+/**
+ * Abuse blunting: max decisions captured per author per UTC day. A patient
+ * abuser could otherwise seed junk "decisions" over hours/days, crowding the
+ * 50-candidate contradiction window and the 60-decision audit. This is a soft
+ * anti-pollution cap, NOT a correctness gate — it is set generously so it never
+ * bites honest usage (a real person finalizes far fewer than 20 decisions a day).
+ * Only CAPTURE is capped; a capped message is still judged against prior
+ * decisions, so an abuser can never use the cap to hide their own contradictions.
+ */
+export const MAX_CAPTURES_PER_USER_PER_DAY = 20;
+
+/**
+ * Pure: how many of `wanted` fresh captures an author may still make today, given
+ * they have already captured `alreadyToday`, under `cap`. Never negative, never
+ * more than `wanted`. Exported so the cap decision is unit-testable without a
+ * live ledger.
+ * @param {number} alreadyToday captures already made by this author today
+ * @param {number} wanted captures this message would otherwise make
+ * @param {number} [cap]
+ * @returns {number} how many to capture now (the rest are skipped)
+ */
+export function capturesAllowedToday(alreadyToday, wanted, cap = MAX_CAPTURES_PER_USER_PER_DAY) {
+  const remaining = Math.max(0, cap - (Number(alreadyToday) || 0));
+  return Math.min(Math.max(0, Number(wanted) || 0), remaining);
+}
+
+/**
+ * Start of the current UTC day as an ISO-8601 timestamp — the lower bound for the
+ * daily capture cap's count. Comparable lexicographically against stored
+ * `created_at` values (also UTC ISO).
+ * @param {number} [now] epoch ms
+ * @returns {string}
+ */
+function utcDayStartIso(now = Date.now()) {
+  return `${new Date(now).toISOString().slice(0, 10)}T00:00:00.000Z`;
+}
 
 // Ambient LLM rate guard: bound how many LLM-triggering pipeline runs we perform
 // over a rolling window, per-user AND globally, so a burst of messages (or one
@@ -493,7 +531,21 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
       ? []
       : classifications.filter((c) => c.confidence >= DECISION_MIN_CONFIDENCE).slice(0, MAX_CAPTURES_PER_MESSAGE);
 
-    if (toCapture.length > 0) {
+    // Daily per-user capture cap (abuse blunting). Count this author's captures
+    // so far today (UTC) and keep only as many of this message's decisions as
+    // still fit under the cap; the rest are silently skipped (no card). This never
+    // touches the contradiction path below — the message is still judged.
+    const author = event.user || 'unknown';
+    const captureAllowance = capturesAllowedToday(
+      countDecisionsByAuthorSince(author, utcDayStartIso()),
+      toCapture.length,
+    );
+    if (captureAllowance < toCapture.length) {
+      logger.info(`[consensus] capture cap: ${author} hit ${MAX_CAPTURES_PER_USER_PER_DAY}/day, skipping capture`);
+    }
+    const capped = toCapture.slice(0, captureAllowance);
+
+    if (capped.length > 0) {
       const [permalink, channelInfo] = await Promise.all([
         fetchPermalink(client, channelId, messageTs),
         fetchChannelInfo(client, channelId),
@@ -505,7 +557,7 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
       }
       const isPrivate = channelInfo.isPrivate === false ? 0 : 1;
 
-      for (const c of toCapture) {
+      for (const c of capped) {
         const decision = addDecision({
           // Cap the captured statement so an over-long (or padded) classification
           // can't bloat the ledger row or downstream renders.
@@ -542,8 +594,8 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
         }
       }
 
-      if (toCapture.length > 1) {
-        logger.info(`[consensus] captured ${toCapture.length} decision(s) from one message`);
+      if (capped.length > 1) {
+        logger.info(`[consensus] captured ${capped.length} decision(s) from one message`);
       }
     }
 
@@ -589,7 +641,9 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
       ) {
         const decision = candidates.find((d) => d.id === verdict.conflictingDecisionId);
         const key = decision ? alertKey(event.user, decision.id) : '';
-        if (decision && !isKnownFalsePositive(text, decision.id) && !alertedToday.has(key)) {
+        // Per-user dismissal memory: only THIS author's own prior "not a conflict"
+        // suppresses the re-alert (event.user is the alerted author).
+        if (decision && !isKnownFalsePositive(text, decision.id, event.user) && !alertedToday.has(key)) {
           // Permission boundary: never quote a private-channel decision to a
           // user who cannot see that channel.
           const visible = await canSeeDecision(client, decision, event.user, logger);
@@ -718,14 +772,25 @@ async function runEditPipeline({ event, client, logger }) {
     const toAdd = toCapture.filter((c) => addedKeys.has(normStatement(c.statement)));
 
     // Retire decisions whose statements no longer appear in the edited message.
+    // Retirement is NOT a capture, so it is never affected by the daily cap below.
     for (const d of toRetire) {
       retireDecision(d.id, `source message edited (${message.edited?.ts || ''})`);
       recordEvent('edited_sync', d.id);
     }
 
+    // Daily per-user capture cap (abuse blunting), applied to edit-added decisions
+    // too so an abuser can't launder captures through edits. Author is the
+    // original message's author.
+    const editAuthor = message.user || 'unknown';
+    const addAllowance = capturesAllowedToday(countDecisionsByAuthorSince(editAuthor, utcDayStartIso()), toAdd.length);
+    if (addAllowance < toAdd.length) {
+      logger.info(`[consensus] capture cap: ${editAuthor} hit ${MAX_CAPTURES_PER_USER_PER_DAY}/day, skipping capture`);
+    }
+    const cappedAdd = toAdd.slice(0, addAllowance);
+
     // Add newly-introduced decisions (same caps/sanitization as capture) and
     // post a capture card in-thread for each.
-    if (toAdd.length > 0) {
+    if (cappedAdd.length > 0) {
       const [permalink, channelInfo] = await Promise.all([
         fetchPermalink(client, channelId, originalTs),
         fetchChannelInfo(client, channelId),
@@ -735,7 +800,7 @@ async function runEditPipeline({ event, client, logger }) {
       }
       const isPrivate = channelInfo.isPrivate === false ? 0 : 1;
 
-      for (const c of toAdd) {
+      for (const c of cappedAdd) {
         const decision = addDecision({
           statement: (c.statement || newText.slice(0, 280)).slice(0, 500),
           rationale: c.rationale,
@@ -767,14 +832,15 @@ async function runEditPipeline({ event, client, logger }) {
       }
     }
 
-    // One compact thread note, only when something actually changed.
-    if (toRetire.length + toAdd.length > 0) {
+    // One compact thread note, only when something actually changed. Counts
+    // reflect what was actually applied (added = post-cap).
+    if (toRetire.length + cappedAdd.length > 0) {
       const keptCount = prior.length - toRetire.length;
       try {
         await client.chat.postMessage({
           channel: channelId,
           thread_ts: originalTs,
-          text: `✏️ Message edited — ledger synced: ${keptCount} kept, ${toRetire.length} retired, ${toAdd.length} added.`,
+          text: `✏️ Message edited — ledger synced: ${keptCount} kept, ${toRetire.length} retired, ${cappedAdd.length} added.`,
         });
       } catch (e) {
         logger.error(`[consensus] failed to post edit-sync note: ${e}`);
@@ -782,7 +848,7 @@ async function runEditPipeline({ event, client, logger }) {
     }
 
     logger.info(
-      `[consensus] handleMessageEdited total ${Date.now() - startedAt}ms → ${prior.length - toRetire.length} kept, ${toRetire.length} retired, ${toAdd.length} added`,
+      `[consensus] handleMessageEdited total ${Date.now() - startedAt}ms → ${prior.length - toRetire.length} kept, ${toRetire.length} retired, ${cappedAdd.length} added`,
     );
   } catch (e) {
     logger.error(`[consensus] edit-sync error (non-fatal): ${e}`);

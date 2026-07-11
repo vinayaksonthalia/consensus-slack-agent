@@ -40,10 +40,11 @@
  * @property {(id: string) => Decision | null} getDecision
  * @property {(id: string, byId: string | null) => void} supersede
  * @property {(id: string) => void} dismiss
- * @property {(newMessageText: string, matchedDecisionId: string) => void} recordDismissal
- * @property {(newMessageText: string, decisionId: string) => boolean} isKnownFalsePositive
+ * @property {(newMessageText: string, matchedDecisionId: string, userId: string | null) => void} recordDismissal
+ * @property {(newMessageText: string, decisionId: string, userId: string | null) => boolean} isKnownFalsePositive
  * @property {(aId: string, bId: string) => void} recordAuditDismissal
  * @property {(aId: string, bId: string) => boolean} isAuditPairDismissed
+ * @property {(userId: string, isoTimestamp: string) => number} countDecisionsByAuthorSince
  * @property {(kind: EventKind, decisionId: string | null) => void} recordEvent
  * @property {() => Stats} stats
  */
@@ -126,6 +127,7 @@ function createSqliteBackend(DatabaseSync) {
       id TEXT PRIMARY KEY,
       new_message_text TEXT NOT NULL,
       matched_decision_id TEXT,
+      user_id TEXT,
       dismissed_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS events (
@@ -149,6 +151,21 @@ function createSqliteBackend(DatabaseSync) {
     }
   } catch {
     // If the pragma/alter fails, callers still work (is_private read defaults to 0).
+  }
+
+  // Idempotent migration: add user_id to dismissals if an older DB predates
+  // per-user dismissal scoping. Same PRAGMA-check pattern as is_private above.
+  // Legacy rows keep a NULL user_id and therefore match NO ONE on lookup (a
+  // dismissal is one person's judgment about their own alert — see
+  // isKnownFalsePositive), so no back-compat handling is needed.
+  try {
+    const cols = /** @type {{name: string}[]} */ (db.prepare('PRAGMA table_info(dismissals)').all());
+    if (!cols.some((c) => c.name === 'user_id')) {
+      db.exec('ALTER TABLE dismissals ADD COLUMN user_id TEXT');
+    }
+  } catch {
+    // If the pragma/alter fails, per-user scoping still holds: legacy rows read
+    // back with a null user_id and match no one.
   }
 
   // Idempotent migration: guarantee at most one decision per (channel, message).
@@ -183,9 +200,15 @@ function createSqliteBackend(DatabaseSync) {
   const supersedeStmt = db.prepare("UPDATE decisions SET status = 'superseded' WHERE id = ?");
   const dismissStmt = db.prepare("UPDATE decisions SET status = 'dismissed' WHERE id = ?");
   const insertDismissal = db.prepare(
-    'INSERT INTO dismissals (id, new_message_text, matched_decision_id, dismissed_at) VALUES (?, ?, ?, ?)',
+    'INSERT INTO dismissals (id, new_message_text, matched_decision_id, user_id, dismissed_at) VALUES (?, ?, ?, ?, ?)',
   );
-  const dismissalsForDecision = db.prepare('SELECT new_message_text FROM dismissals WHERE matched_decision_id = ?');
+  // Scope lookups to the SAME dismissing user. `user_id = ?` bound to a non-null
+  // id can never match a legacy NULL row (SQL NULL = value is never true), so
+  // pre-migration dismissals match no one — exactly the intended reset.
+  const dismissalsForDecisionUser = db.prepare(
+    'SELECT new_message_text FROM dismissals WHERE matched_decision_id = ? AND user_id = ?',
+  );
+  const countByAuthorSince = db.prepare('SELECT COUNT(*) AS n FROM decisions WHERE decided_by = ? AND created_at >= ?');
   const insertEvent = db.prepare('INSERT INTO events (id, kind, decision_id, created_at) VALUES (?, ?, ?, ?)');
   const insertAuditDismissal = db.prepare(
     'INSERT OR IGNORE INTO audit_dismissals (pair_key, created_at) VALUES (?, ?)',
@@ -263,14 +286,20 @@ function createSqliteBackend(DatabaseSync) {
     dismiss(id) {
       dismissStmt.run(id);
     },
-    recordDismissal(newMessageText, matchedDecisionId) {
-      insertDismissal.run(randomUUID(), newMessageText, matchedDecisionId, new Date().toISOString());
+    recordDismissal(newMessageText, matchedDecisionId, userId) {
+      insertDismissal.run(randomUUID(), newMessageText, matchedDecisionId, userId ?? null, new Date().toISOString());
     },
-    isKnownFalsePositive(newMessageText, decisionId) {
+    isKnownFalsePositive(newMessageText, decisionId, userId) {
       const target = normalize(newMessageText);
       if (!target) return false;
-      const rows = /** @type {{new_message_text: string}[]} */ (dismissalsForDecision.all(decisionId));
+      // A lookup without a user id (or against legacy null rows) matches no one.
+      if (userId == null) return false;
+      const rows = /** @type {{new_message_text: string}[]} */ (dismissalsForDecisionUser.all(decisionId, userId));
       return rows.some((r) => normalize(r.new_message_text) === target);
+    },
+    countDecisionsByAuthorSince(userId, isoTimestamp) {
+      const row = /** @type {{n: number}} */ (countByAuthorSince.get(userId, isoTimestamp));
+      return row?.n ?? 0;
     },
     recordAuditDismissal(aId, bId) {
       insertAuditDismissal.run(auditPairKey(aId, bId), new Date().toISOString());
@@ -342,7 +371,7 @@ function createJsonBackend() {
   // Lazy require to avoid top-level fs when sqlite is available.
   const fs = require('node:fs');
 
-  /** @returns {{decisions: Decision[], dismissals: {id: string, new_message_text: string, matched_decision_id: string, dismissed_at: string}[], events: {id: string, kind: string, decision_id: string|null, created_at: string}[], auditDismissals: {pair_key: string, created_at: string}[]}} */
+  /** @returns {{decisions: Decision[], dismissals: {id: string, new_message_text: string, matched_decision_id: string, user_id?: string|null, dismissed_at: string}[], events: {id: string, kind: string, decision_id: string|null, created_at: string}[], auditDismissals: {pair_key: string, created_at: string}[]}} */
   function load() {
     try {
       const data = JSON.parse(fs.readFileSync(JSON_PATH, 'utf8'));
@@ -418,22 +447,30 @@ function createJsonBackend() {
       if (row) row.status = 'dismissed';
       save(data);
     },
-    recordDismissal(newMessageText, matchedDecisionId) {
+    recordDismissal(newMessageText, matchedDecisionId, userId) {
       const data = load();
       data.dismissals.push({
         id: randomUUID(),
         new_message_text: newMessageText,
         matched_decision_id: matchedDecisionId,
+        user_id: userId ?? null,
         dismissed_at: new Date().toISOString(),
       });
       save(data);
     },
-    isKnownFalsePositive(newMessageText, decisionId) {
+    isKnownFalsePositive(newMessageText, decisionId, userId) {
       const target = normalize(newMessageText);
       if (!target) return false;
+      // Scope to the SAME dismissing user. A lookup without a user id, and any
+      // legacy row whose user_id is null/undefined, matches no one (the guard
+      // `r.user_id != null` drops pre-scoping rows before the equality check).
+      if (userId == null) return false;
       return load()
-        .dismissals.filter((r) => r.matched_decision_id === decisionId)
+        .dismissals.filter((r) => r.matched_decision_id === decisionId && r.user_id != null && r.user_id === userId)
         .some((r) => normalize(r.new_message_text) === target);
+    },
+    countDecisionsByAuthorSince(userId, isoTimestamp) {
+      return load().decisions.filter((r) => r.decided_by === userId && r.created_at >= isoTimestamp).length;
     },
     recordAuditDismissal(aId, bId) {
       const data = load();
@@ -563,23 +600,52 @@ export function dismissDecision(id) {
 }
 
 /**
- * Record a user-confirmed false positive so we don't flag it again.
+ * Record a user-confirmed false positive so we don't flag it again — scoped to
+ * the dismissing user.
+ *
+ * Per-user scoping is a security boundary, not a nicety: a dismissal is one
+ * person's judgment about their OWN alert (alerts are ephemeral, seen only by the
+ * message author). When this memory was GLOBAL, any user who dismissed an alert
+ * suppressed that (normalized message text, decision) pair for EVERYONE forever —
+ * a dismissal-poisoning vector where a malicious member posts a real
+ * contradiction, dismisses their own alert, and silences the identical message
+ * for the whole workspace. Scoping the memory to `userId` confines each dismissal
+ * to the person who made it.
  * @param {string} newMessageText
  * @param {string} matchedDecisionId
+ * @param {string | null} [userId] the dismissing user (from the action body)
  * @returns {void}
  */
-export function recordDismissal(newMessageText, matchedDecisionId) {
-  backend.recordDismissal(newMessageText, matchedDecisionId);
+export function recordDismissal(newMessageText, matchedDecisionId, userId = null) {
+  backend.recordDismissal(newMessageText, matchedDecisionId, userId);
 }
 
 /**
- * Whether this message/decision pair was previously dismissed as not-a-conflict.
+ * Whether this message/decision pair was previously dismissed as not-a-conflict
+ * BY THIS user. Only the dismissing user's own rows are consulted; another user's
+ * dismissal never suppresses this user's alert, and legacy rows without a user_id
+ * match no one. See {@link recordDismissal} for the poisoning rationale behind the
+ * per-user scope.
  * @param {string} newMessageText
  * @param {string} decisionId
+ * @param {string | null} [userId] the message author being alerted
  * @returns {boolean}
  */
-export function isKnownFalsePositive(newMessageText, decisionId) {
-  return backend.isKnownFalsePositive(newMessageText, decisionId);
+export function isKnownFalsePositive(newMessageText, decisionId, userId = null) {
+  return backend.isKnownFalsePositive(newMessageText, decisionId, userId);
+}
+
+/**
+ * Count decisions captured by `userId` at or after `isoTimestamp`. Backs the
+ * daily per-author capture cap (see pipeline.js MAX_CAPTURES_PER_USER_PER_DAY),
+ * which blunts slow ledger pollution.
+ * @param {string} userId
+ * @param {string} isoTimestamp ISO-8601; created_at is stored in the same format,
+ *   so a lexicographic `>=` compare is a correct chronological compare.
+ * @returns {number}
+ */
+export function countDecisionsByAuthorSince(userId, isoTimestamp) {
+  return backend.countDecisionsByAuthorSince(userId, isoTimestamp);
 }
 
 /**
