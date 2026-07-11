@@ -9,7 +9,7 @@
 **The first ambient consistency layer for Slack — a contradiction firewall for organizational memory.**
 
 [![CI](https://github.com/BitTriad/consensus-slack-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/BitTriad/consensus-slack-agent/actions/workflows/ci.yml)
-[![Eval](https://img.shields.io/badge/eval-hosted%2055%2F55%20%C2%B7%20P%201.000%20R%201.000-brightgreen)](consensus-core/eval/EVAL-RESULTS-hosted.txt)
+[![Eval](https://img.shields.io/badge/eval-hosted%2057%2F58%20%C2%B7%20P%201.000%20%C2%B7%209%2F9%20injections-brightgreen)](consensus-core/eval/EVAL-RESULTS-hosted.txt)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Slack Platform](https://img.shields.io/badge/Slack-Agents%20%C2%B7%20MCP%20%C2%B7%20RTS-4A154B?logo=slack)](https://docs.slack.dev/ai/)
 
@@ -41,18 +41,18 @@ Built for the **Slack Agent Builder Challenge 2026** (Track 1: Best New Slack Ag
 
 ## Measured, not claimed
 
-The contradiction judge ships with an eval harness — **55 hand-labeled cases** including scope-different near-misses, sarcasm, hypotheticals, negation traps, and **6 adversarial prompt-injection attacks**:
+The contradiction judge ships with an eval harness — **58 hand-labeled cases** including scope-different near-misses, sarcasm, hypotheticals, negation traps, and **9 adversarial prompt-injection attacks** (including Unicode-homoglyph, HTML-entity, and zero-width/RTL-override delimiter-break attempts):
 
 ```
-Cerebras GLM-4.7 (hosted brain)   55/55 · Precision 1.000 · Recall 1.000
-Cerebras gemma (fallback)         55/55 · Precision 1.000 · Recall 1.000
-Claude (local dev, Agent SDK)     54/55 · Precision 0.962 · Recall 1.000  (one ambiguous time-scoping case)
-0 hard-fails on all three · 0/20 near-miss false-positives · 6/6 injections defeated
+Cerebras gemma (fallback)         58/58 · Precision 1.000 · Recall 1.000
+Cerebras GLM-4.7 (hosted brain)   57/58 · Precision 1.000 · Recall 0.964  (one expired-freeze time-scoping case)
+Claude (local dev, Agent SDK)     56/58 · Precision 0.964 · Recall 0.964  (same time-scoping case + one FP)
+0 hard-fails on all three · 9/9 adversarial injections defeated on every stack
 ```
 
 Receipts committed for every stack — hosted [`EVAL-RESULTS-hosted.txt`](consensus-core/eval/EVAL-RESULTS-hosted.txt), gemma [`EVAL-RESULTS-hosted-gemma.txt`](consensus-core/eval/EVAL-RESULTS-hosted-gemma.txt), local Claude [`EVAL-RESULTS.txt`](consensus-core/eval/EVAL-RESULTS.txt) — same prompts throughout. The harness hard-fails on LLM errors (parse failures count as hard errors, with one transient retry, so a dead model can never score) and reports precision as UNDEFINED with zero predicted positives. Run it: `npm run eval`.
 
-The scores are high because the judge is good, not because the test is soft — read the cases yourself in [`consensus-core/eval/dataset.js`](consensus-core/eval/dataset.js): 20 near-misses (same technology different scope, agreeing negations, expired time windows, superseded decisions, sarcasm) and 6 adversarial prompt-injection attacks are in the set specifically to *break* a naive matcher. A keyword bot fails these; the scope-aware judge doesn't.
+The scores are high because the judge is good, not because the test is soft — read the cases yourself in [`consensus-core/eval/dataset.js`](consensus-core/eval/dataset.js): 20 near-misses (same technology different scope, agreeing negations, expired time windows, superseded decisions, sarcasm) and 9 adversarial prompt-injection attacks are in the set specifically to *break* a naive matcher — including fullwidth-homoglyph, HTML-entity, and zero-width/RTL-override delimiter-break payloads that all fail to flip the verdict (untrusted content is NFKC-normalized before delimiter-wrapping). A keyword bot fails these; the scope-aware judge doesn't.
 
 ## Required technologies (all three)
 

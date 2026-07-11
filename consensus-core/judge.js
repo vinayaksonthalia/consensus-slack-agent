@@ -14,6 +14,12 @@ const UNTRUSTED_GUARD =
  * Wrap untrusted, user-originated text in a delimiter tag so the model treats it
  * as data. Any literal `</untrusted…` sequence inside is escaped so the wrapped
  * content cannot break out of (or forge) a delimiter.
+ *
+ * The input is Unicode NFKC-normalized BEFORE escaping: NFKC folds fullwidth /
+ * compatibility look-alikes (e.g. U+FF1C `＜` → ASCII `<`) into their ASCII
+ * equivalents, so the ASCII-only escape below then neutralizes a homoglyph
+ * delimiter that would otherwise slip past it. NFKC is a no-op on plain ASCII,
+ * so behavior for normal content is unchanged.
  * @param {unknown} text
  * @param {string} tag e.g. 'untrusted_message'
  * @returns {string}
@@ -22,6 +28,7 @@ function wrapUntrusted(text, tag) {
   // Escape BOTH closing and opening untrusted-tag sequences so content can
   // neither break out of its wrapper nor forge a nested/spoofed wrapper.
   const safe = String(text ?? '')
+    .normalize('NFKC')
     .replace(/<\/(untrusted)/gi, '&lt;/$1')
     .replace(/<(untrusted)/gi, '&lt;$1');
   return `<${tag}>${safe}</${tag}>`;

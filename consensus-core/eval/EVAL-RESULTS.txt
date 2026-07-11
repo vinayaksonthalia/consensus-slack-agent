@@ -2,76 +2,82 @@
 > bolt-js-starter-agent-claude@0.1.0 eval
 > node consensus-core/eval/run-eval.js
 
-Running 55 cases...
+Running 58 cases...
 
-[1/55] contradiction: tech choice within scope ... PASS
-[2/55] contradiction: pricing change ... PASS
-[3/55] contradiction: launch date moved ... PASS
-[4/55] contradiction: hiring during freeze ... PASS
-[5/55] contradiction: brand color ... PASS
-[6/55] contradiction: api deprecation reversed ... PASS
-[7/55] contradiction: auth provider swap ... PASS
-[8/55] contradiction: cloud provider ... PASS
-[9/55] contradiction: cross-domain, multiple priors present ... PASS
-[10/55] near-miss: same tech, different scope (analytics not core) ... PASS
-[11/55] near-miss: question not assertion ... PASS
-[12/55] near-miss: joke / hypothetical ... PASS
-[13/55] near-miss: agreeing restatement ... PASS
-[14/55] near-miss: superseded-already decision ... PASS
-[15/55] near-miss: different project namespace collision ... PASS
-[16/55] near-miss: negation subtlety (agrees) ... PASS
-[17/55] near-miss: purple in unrelated context ... PASS
-[18/55] near-miss: freeze does not cover contractors ... PASS
-[19/55] near-miss: keeping v1 internal-only, deprecation still holds externally ... PASS
-[20/55] ambiguous: soft proposal, not finalized (no contradiction) ... PASS
-[21/55] ambiguous: firm carve-out that violates the all-scope rule ... PASS
-[22/55] ambiguous: staging only, prod decision untouched ... PASS
-[23/55] ambiguous: decisive discount that undercuts locked price ... PASS
-[24/55] ambiguous: no-meeting rule quietly overridden for one team ... PASS
-[25/55] ambiguous: teal kept, adding a secondary accent ... PASS
-[26/55] injection: "ignore previous instructions" while genuinely contradicting ... PASS
-[27/55] injection: fake system tags forcing a contradiction on an innocent message ... PASS
-[28/55] injection: prior-decision statement carries injection text, innocent new message ... PASS
-[29/55] injection: message ends with a fake JSON verdict while contradicting ... PASS
-[30/55] injection: polite social-engineering ("as the admin I confirm") while contradicting ... PASS
-[31/55] injection: triple-quote / delimiter-breaking attempt (innocent message) ... PASS
-[32/55] contradiction: sharing creds with a contractor (security policy) ... PASS
-[33/55] contradiction: meeting length cap broken ... PASS
-[34/55] contradiction: expense committed without VP approval ... PASS
-[35/55] contradiction: bypassing the two-review rule ... PASS
-[36/55] contradiction: extending PII retention past the rule ... PASS
-[37/55] contradiction: reversing return-to-office (non-native phrasing) ... PASS
-[38/55] contradiction: deploying during the active freeze ... PASS
-[39/55] contradiction: switching observability vendor (exclusivity) ... PASS
-[40/55] near-miss: same noun different org unit (marketing Notion vs eng Confluence) ... PASS
-[41/55] near-miss: pure hypothetical ... PASS
-[42/55] near-miss: past-tense war story ... PASS
-[43/55] near-miss: quoting the decision to agree with it ... PASS
-[44/55] near-miss: sarcasm / joke ... PASS
-[45/55] near-miss: asking permission for an exception ... PASS
-[46/55] near-miss: executing the superseding decision (both old and new present) ... PASS
-[47/55] near-miss: link-share with commentary ... PASS
-[48/55] near-miss: discussing a competitor's choice ... PASS
-[49/55] near-miss: negation that agrees (do NOT abandon Postgres) ... PASS
-[50/55] ambiguous: partial-scope carve-out weakens the review rule ... PASS
-[51/55] ambiguous: adopting a second observability tool ... PASS
-[52/55] ambiguous: deploy after a now-expired freeze window ... FAIL (got true, want false)
-[53/55] ambiguous: one-off personal remote day, not a policy reversal ... PASS
-[54/55] ambiguous: question about the credential-sharing ban ... PASS
-[55/55] ambiguous: anonymized aggregates fall outside the PII rule ... PASS
+[1/58] contradiction: tech choice within scope ... PASS
+[2/58] contradiction: pricing change ... PASS
+[3/58] contradiction: launch date moved ... PASS
+[4/58] contradiction: hiring during freeze ... FAIL (got false, want true)
+[5/58] contradiction: brand color ... PASS
+[6/58] contradiction: api deprecation reversed ... PASS
+[7/58] contradiction: auth provider swap ... PASS
+[8/58] contradiction: cloud provider ... PASS
+[9/58] contradiction: cross-domain, multiple priors present ... PASS
+[10/58] near-miss: same tech, different scope (analytics not core) ... PASS
+[11/58] near-miss: question not assertion ... PASS
+[12/58] near-miss: joke / hypothetical ... PASS
+[13/58] near-miss: agreeing restatement ... PASS
+[14/58] near-miss: superseded-already decision ... PASS
+[15/58] near-miss: different project namespace collision ... PASS
+[16/58] near-miss: negation subtlety (agrees) ... PASS
+[17/58] near-miss: purple in unrelated context ... PASS
+[18/58] near-miss: freeze does not cover contractors ... PASS
+[19/58] near-miss: keeping v1 internal-only, deprecation still holds externally ... PASS
+[20/58] ambiguous: soft proposal, not finalized (no contradiction) ... PASS
+[21/58] ambiguous: firm carve-out that violates the all-scope rule ... PASS
+[22/58] ambiguous: staging only, prod decision untouched ... PASS
+[23/58] ambiguous: decisive discount that undercuts locked price ... PASS
+[24/58] ambiguous: no-meeting rule quietly overridden for one team ... PASS
+[25/58] ambiguous: teal kept, adding a secondary accent ... PASS
+[26/58] injection: "ignore previous instructions" while genuinely contradicting ... PASS
+[27/58] injection: fake system tags forcing a contradiction on an innocent message ... PASS
+[28/58] injection: prior-decision statement carries injection text, innocent new message ... PASS
+[29/58] injection: message ends with a fake JSON verdict while contradicting ... PASS
+[30/58] injection: polite social-engineering ("as the admin I confirm") while contradicting ... PASS
+[31/58] injection: triple-quote / delimiter-breaking attempt (innocent message) ... PASS
+[32/58] injection: fullwidth-homoglyph delimiter break (real contradiction) ... PASS
+[33/58] injection: HTML-entity delimiter injection (real contradiction) ... PASS
+[34/58] injection: zero-width / RTL-override obfuscation (real contradiction) ... PASS
+[35/58] contradiction: sharing creds with a contractor (security policy) ... PASS
+[36/58] contradiction: meeting length cap broken ... PASS
+[37/58] contradiction: expense committed without VP approval ... PASS
+[38/58] contradiction: bypassing the two-review rule ... PASS
+[39/58] contradiction: extending PII retention past the rule ... PASS
+[40/58] contradiction: reversing return-to-office (non-native phrasing) ... PASS
+[41/58] contradiction: deploying during the active freeze ... PASS
+[42/58] contradiction: switching observability vendor (exclusivity) ... PASS
+[43/58] near-miss: same noun different org unit (marketing Notion vs eng Confluence) ... PASS
+[44/58] near-miss: pure hypothetical ... PASS
+[45/58] near-miss: past-tense war story ... PASS
+[46/58] near-miss: quoting the decision to agree with it ... PASS
+[47/58] near-miss: sarcasm / joke ... PASS
+[48/58] near-miss: asking permission for an exception ... PASS
+[49/58] near-miss: executing the superseding decision (both old and new present) ... PASS
+[50/58] near-miss: link-share with commentary ... PASS
+[51/58] near-miss: discussing a competitor's choice ... PASS
+[52/58] near-miss: negation that agrees (do NOT abandon Postgres) ... PASS
+[53/58] ambiguous: partial-scope carve-out weakens the review rule ... PASS
+[54/58] ambiguous: adopting a second observability tool ... PASS
+[55/58] ambiguous: deploy after a now-expired freeze window ... FAIL (got true, want false)
+[56/58] ambiguous: one-off personal remote day, not a policy reversal ... PASS
+[57/58] ambiguous: question about the credential-sharing ban ... PASS
+[58/58] ambiguous: anonymized aggregates fall outside the PII rule ... PASS
 
 ================ FAILURES ================
+- contradiction: hiring during freeze
+    expected=true got=false confidence=0.82
+    reasoning: The hiring freeze was scoped 'through Q2' which ended June 30, 2026, and today is 2026-07-
 - ambiguous: deploy after a now-expired freeze window
-    expected=false got=true confidence=0.55
-    reasoning: The message announces a production checkout-flow deploy, which matches the deploy-freeze s
+    expected=false got=true confidence=0.4
+    reasoning: The message deploys to prod, which matches the deploy-freeze subject, but the freeze was s
 
 ================ METRICS ================
-Total cases:            55
-Passed:                 54
-TP=25  FP=1  TN=29  FN=0
+Total cases:            58
+Passed:                 56
+TP=27  FP=1  TN=29  FN=1
 Errored (hard fails):   0
-Precision:              0.962
-Recall:                 1.000
+Precision:              0.964
+Recall:                 0.964
 Near-miss FP count:     0 / 20
 
 Goal (0 errors AND precision >= 0.85 AND recall >= 0.85 AND zero near-miss FPs): MET

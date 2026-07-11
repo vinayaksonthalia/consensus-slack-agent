@@ -159,9 +159,51 @@ function seenBefore(id) {
  */
 const alertedToday = new Set();
 
+/** Hard cap on {@link alertedToday} entries, evicting oldest (insertion order). */
+const ALERTED_MAX = 5000;
+
 /** @param {string} userId @param {string} decisionId */
 function alertKey(userId, decisionId) {
   return `${userId}:${decisionId}:${new Date().toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Record that `key` has been alerted, keeping {@link alertedToday} self-pruning
+ * and bounded WITHOUT changing alert semantics. Keys are
+ * `${userId}:${decisionId}:${YYYY-MM-DD}`; on each add we drop every entry whose
+ * date-suffix isn't today's (yesterday's guards are dead weight — a re-alert is
+ * only ever suppressed within the same day), then cap total size, evicting oldest
+ * (insertion order) like {@link seenBefore}'s processedIds. Pure over the module
+ * Set; the pruning itself lives in {@link pruneAlerted} for unit testing.
+ * @param {string} key
+ * @returns {void}
+ */
+function recordAlerted(key) {
+  pruneAlerted(alertedToday, key, new Date().toISOString().slice(0, 10));
+}
+
+/**
+ * Pure helper mirroring {@link recordAlerted}'s pruning, over a caller-supplied
+ * Set so the bound + stale-day eviction can be unit-tested without the module
+ * singleton. Mutates and returns `set`: drops keys whose date-suffix != `today`,
+ * adds `key`, then evicts oldest entries until size <= `cap`. Exported for tests.
+ * @param {Set<string>} set
+ * @param {string} key
+ * @param {string} today YYYY-MM-DD suffix considered current
+ * @param {number} [cap]
+ * @returns {Set<string>}
+ */
+export function pruneAlerted(set, key, today, cap = ALERTED_MAX) {
+  for (const k of set) {
+    if (!k.endsWith(`:${today}`)) set.delete(k);
+  }
+  set.add(key);
+  while (set.size > cap) {
+    const oldest = set.values().next().value;
+    if (oldest === undefined) break;
+    set.delete(oldest);
+  }
+  return set;
 }
 
 /**
@@ -668,8 +710,9 @@ async function runPipeline({ event, client, logger, text, decisionAdjacent }) {
               });
             }
             // Only suppress future alerts for this (user, decision) once the
-            // ephemeral post has actually succeeded.
-            alertedToday.add(key);
+            // ephemeral post has actually succeeded. recordAlerted keeps the
+            // in-memory Set self-pruning (drops non-today keys) and bounded.
+            recordAlerted(key);
             recordEvent('alert_fired', decision.id);
           } catch (e) {
             logger.error(`[consensus] failed to post contradiction alert: ${e}`);

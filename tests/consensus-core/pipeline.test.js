@@ -6,6 +6,7 @@ import {
   checkRateWindow,
   isQueueFull,
   looksLikeQuestion,
+  pruneAlerted,
 } from '../../consensus-core/pipeline.js';
 
 describe('looksLikeQuestion', () => {
@@ -81,6 +82,37 @@ describe('capturesAllowedToday (daily per-user capture cap)', () => {
     assert.strictEqual(capturesAllowedToday(2, 5, 3), 1);
     assert.strictEqual(capturesAllowedToday(/** @type {any} */ (undefined), 3, 3), 3);
     assert.strictEqual(capturesAllowedToday(1, /** @type {any} */ (null), 3), 0);
+  });
+});
+
+describe('pruneAlerted (self-pruning, bounded alert memory)', () => {
+  it('adds the key and drops entries from other days', () => {
+    const set = new Set(['u1:d1:2026-07-10', 'u2:d2:2026-07-09']);
+    pruneAlerted(set, 'u3:d3:2026-07-11', '2026-07-11');
+    // Only today's keys survive (plus the freshly added one).
+    assert.deepStrictEqual([...set].sort(), ['u3:d3:2026-07-11']);
+  });
+
+  it('keeps multiple same-day keys', () => {
+    const set = new Set(['u1:d1:2026-07-11']);
+    pruneAlerted(set, 'u2:d2:2026-07-11', '2026-07-11');
+    assert.strictEqual(set.size, 2);
+    assert.ok(set.has('u1:d1:2026-07-11'));
+    assert.ok(set.has('u2:d2:2026-07-11'));
+  });
+
+  it('caps total size, evicting oldest (insertion order)', () => {
+    const set = new Set();
+    for (let i = 0; i < 5; i += 1) pruneAlerted(set, `u:d${i}:2026-07-11`, '2026-07-11', 3);
+    // Cap 3 → only the 3 most-recently-added remain; oldest evicted.
+    assert.strictEqual(set.size, 3);
+    assert.deepStrictEqual([...set], ['u:d2:2026-07-11', 'u:d3:2026-07-11', 'u:d4:2026-07-11']);
+  });
+
+  it('is idempotent for a repeated same-day key', () => {
+    const set = new Set(['u1:d1:2026-07-11']);
+    pruneAlerted(set, 'u1:d1:2026-07-11', '2026-07-11');
+    assert.strictEqual(set.size, 1);
   });
 });
 

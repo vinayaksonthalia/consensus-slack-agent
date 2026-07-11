@@ -109,12 +109,21 @@ const UNTRUSTED_GUARD =
  * as data. Escaping is identical to judge.js's private helper: any literal
  * `<untrusted…` / `</untrusted…` sequence is neutralized so wrapped content can
  * neither break out of nor forge a delimiter.
+ *
+ * The input is Unicode NFKC-normalized BEFORE escaping: NFKC folds fullwidth /
+ * compatibility look-alikes (e.g. U+FF1C `＜` → ASCII `<`) into their ASCII
+ * equivalents, so the ASCII-only escape below then neutralizes a homoglyph
+ * delimiter that would otherwise slip past it. NFKC is a no-op on plain ASCII,
+ * so behavior for normal content is unchanged.
  * @param {unknown} text
  * @param {string} tag
  * @returns {string}
  */
 function wrapUntrusted(text, tag) {
+  // Escape BOTH closing and opening untrusted-tag sequences so content can
+  // neither break out of its wrapper nor forge a nested/spoofed wrapper.
   const safe = String(text ?? '')
+    .normalize('NFKC')
     .replace(/<\/(untrusted)/gi, '&lt;/$1')
     .replace(/<(untrusted)/gi, '&lt;$1');
   return `<${tag}>${safe}</${tag}>`;
