@@ -54,7 +54,7 @@ Receipts committed for every stack — hosted [`EVAL-RESULTS-hosted.txt`](consen
 
 ## Required technologies (all three)
 
-- **Real-Time Search API** (`assistant.search.context`) — live permission-aware workspace search in the provenance path, on the **local per-user-OAuth path** (`search:read.*` scopes; demoed with the pre-connected account in the video). The hosted cloud brain is ledger-grounded and does not call RTS.
+- **Real-Time Search API** (`assistant.search.context`) — live workspace search in **both paths**: the hosted brain augments provenance answers with live public-channel search (public-only by construction — the token is the app owner's, so restricting to workspace-public content makes it leak-proof for any asker), and the local per-user-OAuth path searches the full permission-aware `search:read.*` scope as the requesting user (demoed in the video).
 - **Slack MCP Server** — search/read/write tools, exercised on the same **local per-user-OAuth path** (shown in the video). The hosted cloud brain is ledger-grounded and does not call MCP.
 - **Slack AI / Agent & Assistant surface** — conversational provenance Q&A (both paths)
 

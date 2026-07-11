@@ -158,6 +158,29 @@ export function audiencePreFilter(isPrivate, audience) {
 }
 
 /**
+ * Build the LIVE SEARCH prompt block from a list of RTS hits for the hosted path.
+ * Pure and synchronous. Each hit's untrusted `content` is whitespace/control-char
+ * collapsed and wrapped in an <untrusted_context> delimiter so it can't smuggle
+ * instructions; provenance (author id, #channel_name, permalink) is our own
+ * metadata and stays raw so the model can cite it. Returns '' for an empty list
+ * so the prompt is byte-identical to today's when there are no live hits.
+ * @param {import('../consensus-core/rts.js').RtsResult[]} hits
+ * @returns {string}
+ */
+export function renderLiveSearchBlock(hits) {
+  if (!Array.isArray(hits) || hits.length === 0) return '';
+  const lines = hits
+    .map((h) => {
+      const where = h.channel_name ? `#${h.channel_name}` : h.channel_id || 'unknown channel';
+      const who = h.author_user_id ? `<@${h.author_user_id}>` : h.author_name || 'unknown';
+      const content = wrapUntrusted(collapseUntrusted(h.content), 'untrusted_context');
+      return `- ${content} — from ${who} in ${where}${h.permalink ? ` (link: ${h.permalink})` : ''}`;
+    })
+    .join('\n');
+  return `\n\n## LIVE SEARCH (raw workspace conversation — NOT decisions)\n${lines}`;
+}
+
+/**
  * @typedef {Object} AgentDeps
  * @property {import('@slack/web-api').WebClient} client
  * @property {string} userId
@@ -421,6 +444,32 @@ async function runAgentHosted(text, deps) {
     if (visible.length >= 25) break;
   }
 
+  // Real-Time Search augmentation for the HOSTED (judged cloud) path. The token
+  // here is the APP OWNER's user token (process.env.SLACK_USER_TOKEN), NOT the
+  // requesting user's. Because that one token is the same for every asker in
+  // every surface, live search is HARD-CODED to `public_channel` and MUST NEVER
+  // be widened by audience or asker: restricting to content that is public to
+  // the whole workspace makes hosted RTS leak-proof — nothing an owner can see
+  // privately can ever surface to an asker who shouldn't. Fully fail-open: no
+  // token → byte-identical to before; searchContext already returns [] on any
+  // error/timeout, and the try/catch guarantees nothing here can break the reply.
+  /** @type {import('../consensus-core/rts.js').RtsResult[]} */
+  let liveHits = [];
+  if (process.env.SLACK_USER_TOKEN && deps?.client) {
+    try {
+      liveHits = await searchContext(deps.client, {
+        query: text,
+        token: process.env.SLACK_USER_TOKEN,
+        channelTypes: 'public_channel',
+        limit: 5,
+      });
+    } catch {
+      // fail-open: any unexpected throw leaves liveHits empty
+      liveHits = [];
+    }
+  }
+  const liveBlock = renderLiveSearchBlock(liveHits);
+
   const ledgerBlock =
     visible.length === 0
       ? '(no ledger matches for this message)'
@@ -444,9 +493,15 @@ async function runAgentHosted(text, deps) {
     'When answering what/why/when-was-decided questions, cite the relevant decisions below ' +
     'exactly (who decided, where, when, include the link if present). ' +
     'Never invent a decision that is not listed. If nothing below is relevant, say plainly ' +
-    'that no formal decision is logged on the topic.' +
+    'that no formal decision is logged on the topic. ' +
+    'TWO RESULT TYPES, never conflate them: the DECISION LEDGER holds settled, captured team ' +
+    'DECISIONS — present these as decisions. LIVE SEARCH results (if any) are raw workspace ' +
+    'CONVERSATION, NOT decisions — if you cite one, frame it explicitly as discussion/chatter ' +
+    '("there was also a message in #x suggesting…"), never as something the team decided. If only ' +
+    'live-search hits exist and no ledger entry is relevant, say clearly that NO formal decision is logged.' +
     UNTRUSTED_GUARD +
-    `\n\n## DECISION LEDGER (authoritative, complete for this workspace)\n${ledgerBlock}`;
+    `\n\n## DECISION LEDGER (authoritative, complete for this workspace)\n${ledgerBlock}` +
+    liveBlock;
 
   const raw = await llmComplete(text, { system });
 
