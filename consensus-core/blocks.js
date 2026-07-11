@@ -48,20 +48,98 @@ export function sanitizeMrkdwn(text, maxLen = 300) {
 }
 
 /**
- * Compact "Decision captured" card, posted in-thread.
- * @param {{statement: string, decidedBy?: string|null, channelName?: string|null, permalink?: string|null, id: string}} args
+ * Human-readable lifecycle label + emoji for a decision status.
+ * @param {Decision['status']} status
+ * @returns {{emoji: string, label: string}}
+ */
+export function lifecycleBadge(status) {
+  switch (status) {
+    case 'proposed':
+      return { emoji: '📝', label: 'Proposed' };
+    case 'confirmed':
+      return { emoji: '✅', label: 'Confirmed' };
+    case 'active':
+      return { emoji: '🟢', label: 'Active' };
+    case 'exception':
+      return { emoji: '⚖️', label: 'Exception' };
+    case 'superseded':
+      return { emoji: '🔁', label: 'Superseded' };
+    case 'expired':
+      return { emoji: '⌛', label: 'Expired' };
+    case 'rejected':
+      return { emoji: '🚫', label: 'Rejected' };
+    default:
+      return { emoji: '🟢', label: 'Active' };
+  }
+}
+
+/**
+ * Lifecycle action buttons appropriate to a decision's current state. Proposed
+ * decisions can be Confirmed / Rejected / Marked-exception / Superseded; already
+ * enforceable ones (active/confirmed) can be narrowed to an exception or
+ * superseded; terminal states (superseded/expired/rejected) carry no actions.
+ * Every button is authority-gated in the handler (see governance.canConfirm).
+ * @param {Decision['status']} status
+ * @param {string} id
  * @returns {import('@slack/types').KnownBlock[]}
  */
-export function decisionCard({ statement, decidedBy, channelName, permalink, id }) {
+function lifecycleActions(status, id) {
+  /** @type {any[]} */
+  const elements = [];
+  if (status === 'proposed') {
+    elements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'Confirm', emoji: true },
+      action_id: 'consensus_confirm',
+      value: id,
+      style: 'primary',
+    });
+    elements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'Reject', emoji: true },
+      action_id: 'consensus_reject',
+      value: id,
+      style: 'danger',
+    });
+  }
+  if (status === 'proposed' || status === 'active' || status === 'confirmed') {
+    elements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'Mark exception', emoji: true },
+      action_id: 'consensus_exception',
+      value: id,
+    });
+    elements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'Mark superseded', emoji: true },
+      action_id: 'consensus_supersede',
+      value: id,
+    });
+  }
+  if (elements.length === 0) return [];
+  return [{ type: 'actions', elements }];
+}
+
+/**
+ * Compact "Decision captured" card, posted in-thread. Shows the lifecycle state
+ * (badge) and the owner, and renders lifecycle actions appropriate to the state.
+ * @param {{statement: string, decidedBy?: string|null, channelName?: string|null, permalink?: string|null, id: string, status?: Decision['status'], ownerUserId?: string|null}} args
+ * @returns {import('@slack/types').KnownBlock[]}
+ */
+export function decisionCard({ statement, decidedBy, channelName, permalink, id, status = 'active', ownerUserId }) {
   const where = channelName ? `#${channelName}` : 'this channel';
+  const badge = lifecycleBadge(status);
+  const owner = ownerUserId ?? decidedBy;
+  const header = status === 'proposed' ? '📝 Proposed decision' : '📌 Decision captured';
   const contextText =
-    `Decided by ${userMention(decidedBy)} in ${where} · ${shortDate(new Date().toISOString())}` +
+    `${badge.emoji} *${badge.label}* · Owner ${userMention(owner)} · in ${where} · ${shortDate(new Date().toISOString())}` +
     (permalink ? ` · <${permalink}|view message>` : '');
 
-  return [
+  /** @type {import('@slack/types').KnownBlock[]} */
+  const blocks = [
     {
       type: 'header',
-      text: { type: 'plain_text', text: '📌 Decision captured', emoji: true },
+      text: { type: 'plain_text', text: header, emoji: true },
     },
     {
       type: 'section',
@@ -71,25 +149,20 @@ export function decisionCard({ statement, decidedBy, channelName, permalink, id 
       type: 'context',
       elements: [{ type: 'mrkdwn', text: contextText }],
     },
-    {
-      type: 'actions',
+  ];
+  if (status === 'proposed') {
+    blocks.push({
+      type: 'context',
       elements: [
         {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Mark superseded', emoji: true },
-          action_id: 'consensus_supersede',
-          value: id,
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Not a decision', emoji: true },
-          action_id: 'consensus_not_decision',
-          value: id,
-          style: 'danger',
+          type: 'mrkdwn',
+          text: '_Proposed — not yet enforced. An authorized owner/admin can Confirm to make it a standing decision._',
         },
       ],
-    },
-  ];
+    });
+  }
+  blocks.push(...lifecycleActions(status, id));
+  return blocks;
 }
 
 /**
@@ -110,7 +183,7 @@ export function contradictionAlert({ newMessageText, decision, confidence, reaso
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: '⚠️ *Heads up — this may conflict with a team decision.*',
+        text: '⚠️ *Heads up — this may conflict with an active team policy.*',
       },
     },
     {
@@ -155,9 +228,7 @@ export function contradictionAlert({ newMessageText, decision, confidence, reaso
 
 /** @param {Decision['status']} status */
 function statusEmoji(status) {
-  if (status === 'superseded') return '🔁';
-  if (status === 'dismissed') return '🚫';
-  return '🟢';
+  return lifecycleBadge(status).emoji;
 }
 
 /**
