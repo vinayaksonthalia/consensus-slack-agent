@@ -132,6 +132,16 @@ slack run          # installs to your sandbox and starts via Socket Mode
 
 Requires the [Slack CLI](https://tools.slack.dev/slack-cli/) and a [developer sandbox](https://api.slack.com/developer-program). **Dual model stack:** local development runs Claude via the Claude Agent SDK (local Claude auth); the hosted/cloud deployment runs **Cerebras GLM-4.7** (set `CEREBRAS_API_KEY`), with a Cerebras gemma / `GEMINI_API_KEY` fallback. Same prompts on every stack; receipts committed for each. For Real-Time Search, complete the per-user OAuth flow via `node app-oauth.js`.
 
+### Self-host it — bring your own keys
+
+Consensus is fully self-hostable and runs on **your own model keys** — nothing is locked to a vendor:
+
+- Set `CEREBRAS_API_KEY` (default hosted brain, `zai-glm-4.7`), **or** `GEMINI_API_KEY`, **or** use local Claude via the Agent SDK. The chain in `consensus-core/llm.js` picks the first key present.
+- The ledger runs on **MongoDB Atlas** (`MONGODB_URI`) in production, or a local `node:sqlite` / JSON file for development — no external service required just to try it.
+- Deploy anywhere that runs a Node Socket-Mode process (we run 24/7 on Render's free tier); env vars are the only configuration.
+
+A team can run their **own** private instance, on their **own** keys, with their **own** data. The demo sandbox judges test uses our keys; production users bring their own.
+
 ## Trust & safety design
 
 - Ephemeral-first alerts — nobody is called out publicly
@@ -141,6 +151,13 @@ Requires the [Slack CLI](https://tools.slack.dev/slack-cli/) and a [developer sa
 - Private-channel content never leaks: per-alert and per-viewer membership checks, unknown privacy treated as private
 - Hardened by adversarial review: a multi-model hostile pass (GPT + Gemini) was triaged and its real findings fixed — audience-gated provenance (channel replies cite public decisions only; DMs are membership-gated), per-user sessions, and rate + queue + audit metering
 - Trust model is "members are colleagues" (company workspaces, not open-invite communities): anyone can state a decision and anyone can correct the ledger — but every action is public, attributed, and event-logged, so manipulation is visible and reversible rather than silently prevented. Abuse blunting is built in: per-user dismissal memory (nobody can silence alerts for anyone else), a per-author daily capture cap (ledger flooding is throttled), and per-user/global rate guards. Full raid-resistant admin controls (member-tenure gating, role-gated corrections) are roadmap
+
+## Roadmap
+
+- **Admin control dashboard + one-click install** *(next priority)* — an install-to-org OAuth flow and a self-serve config surface to opt channels in/out, tune sensitivity, and manage permissions in one place. Today setup is developer-driven (env vars + Slack CLI); a control panel is the biggest lever on adoption.
+- **Windowed dashboard stats** (7 / 30-day) — the schema is already there.
+- **Member-tenure gating & role-gated corrections** for open-invite communities.
+- **Deeper permission-aware search** and cross-message decision stitching.
 
 ---
 
