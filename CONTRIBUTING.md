@@ -36,4 +36,4 @@ ES modules, JSDoc types (no TypeScript files), biome formatting (single quotes, 
 - Private-channel decision content must never reach a non-member — in alerts, App Home, or agent answers.
 - Unknown permission state fails closed.
 - All user-generated text is untrusted: wrap it (`wrapUntrusted`) before any LLM prompt and sanitize it (`sanitizeMrkdwn`) before any Block Kit surface.
-- No tokens or secrets in the repo, ever. Runtime credentials live in `.env` (local) or Actions secrets (CI/serve).
+- No tokens or secrets in the repo, ever. Runtime credentials live in `.env` (local), Render environment variables (the hosted service), or GitHub Actions secrets (CI).
