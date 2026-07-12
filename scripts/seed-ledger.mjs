@@ -32,6 +32,9 @@ for (const r of rows) {
     permalink: r.permalink ?? null,
     confidence: r.confidence ?? 0.9,
     is_private: r.is_private ? 1 : 0,
+    // Preserve the original decision date so backdated seed rows do not consume
+    // the author's per-UTC-day capture cap (else all 18 count as "today").
+    created_at: r.created_at ?? null,
   });
   // Map both the legacy ('dismissed') and new ('rejected') seed vocab.
   if (r.status === 'superseded') await supersede(d.id, null);
