@@ -142,26 +142,16 @@ npm install
 slack run          # installs to your sandbox and starts via Socket Mode
 ```
 
-Requires the [Slack CLI](https://tools.slack.dev/slack-cli/) and a [developer sandbox](https://api.slack.com/developer-program). **Dual model stack:** local development runs Claude via the Claude Agent SDK (local Claude auth); the hosted/cloud deployment runs **Cerebras GLM-4.7** (set `CEREBRAS_API_KEY`), with a Cerebras gemma / `GEMINI_API_KEY` fallback. Same prompts on every stack; receipts committed for each. For Real-Time Search, complete the per-user OAuth flow via `node app-oauth.js`.
+Requires the [Slack CLI](https://tools.slack.dev/slack-cli/) and a [developer sandbox](https://api.slack.com/developer-program). **Dual model stack:** local dev runs Claude via the Claude Agent SDK; the hosted deployment runs **Cerebras GLM-4.7** (`CEREBRAS_API_KEY`), with a gemma / `GEMINI_API_KEY` fallback. For Real-Time Search, complete the per-user OAuth flow via `node app-oauth.js`. Full self-host and deploy steps are below.
 
 ### Self-host it — bring your own keys
 
-Consensus is fully self-hostable and runs on **your own model keys** — nothing is locked to a vendor:
-
-- Set `CEREBRAS_API_KEY` (default hosted brain, `zai-glm-4.7`), **or** `GEMINI_API_KEY`, **or** use local Claude via the Agent SDK. The chain in `consensus-core/llm.js` picks the first key present.
-- The ledger runs on **MongoDB Atlas** (`MONGODB_URI`) in production, or a local `node:sqlite` / JSON file for development — no external service required just to try it.
-- Deploy anywhere that runs a Node Socket-Mode process (we run 24/7 on Render's free tier); env vars are the only configuration.
-
-A team can run their **own** private instance, on their **own** keys, with their **own** data. The demo sandbox judges test uses our keys; production users bring their own.
-
-### Bring Consensus to your workspace
-
-There's no marketplace listing yet, but any team can stand up its own instance in ~20 minutes:
+Consensus is fully self-hostable — nothing is locked to a vendor, and there's no marketplace listing to wait on. Any team can stand up its own private instance in ~20 minutes:
 
 1. **Clone & install** — clone the repo, then `cd claude-agent-sdk && npm install`.
 2. **Create your Slack app** — from the included [`manifest.json`](manifest.json) (Slack CLI `slack create`, or [api.slack.com/apps](https://api.slack.com/apps) → *Create New App → From a manifest*). Turn on **Socket Mode**.
 3. **Get two tokens** — the **Bot token** (`xoxb-…`, from *OAuth & Permissions*) and an **App-level token** (`xapp-…`, scope `connections:write`, from *Basic Information → App-Level Tokens*).
-4. **Bring your own keys** — set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and **your own** model key: `CEREBRAS_API_KEY` **or** `GEMINI_API_KEY` **or** local Claude via the Agent SDK (the chain picks whichever is present). Optionally set `MONGODB_URI` for durable storage — omit it and Consensus falls back to a local `node:sqlite` / JSON file.
+4. **Bring your own keys** — set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and **your own** model key: `CEREBRAS_API_KEY` (default, `zai-glm-4.7`) **or** `GEMINI_API_KEY` **or** local Claude via the Agent SDK — the chain in `consensus-core/llm.js` picks whichever is present. Set `MONGODB_URI` for durable storage, or omit it to fall back to a local `node:sqlite` / JSON file (no external service needed just to try it).
 5. **Run it** — `node app.js` locally, or deploy the included [`render.yaml`](render.yaml) to [Render](https://render.com) (how our 24/7 instance runs). Then invite the bot to the channels you want it to guard.
 
 Your instance runs entirely on **your keys, your workspace, your data** — nothing routes through us. A **one-click install + admin dashboard** (zero developer setup) is the [next item on our roadmap](#roadmap).
