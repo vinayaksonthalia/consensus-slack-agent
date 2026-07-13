@@ -27,7 +27,7 @@ Built for the **Slack Agent Builder Challenge 2026** (Track 1: Best New Slack Ag
 - **Provenance on demand** — ask `@Consensus why did we choose Postgres?` and get the real ledger entry with the original thread as proof, augmented by Slack's **Real-Time Search API** on the local per-user-OAuth path (`[ledger]` vs `[live search]` results are never conflated).
 - **Edit-sync & delete-retirement** — edit a captured message and Consensus reconciles the ledger (keep / retire / add) with a quiet "✏️ ledger synced" note; delete a decision and it's retired, so no ghost rule keeps firing.
 - **It learns** — every *Not a conflict* becomes persistent false-positive memory; precision is tracked on the App Home dashboard.
-- **Consistency audit** — on demand, Consensus X-rays the whole ledger in a two-stage sweep (LLM scan → verification by the measured judge, bidirectional) and surfaces latent contradictions — pairs of standing decisions that already conflict without anyone noticing. Permission-filtered per viewer, DM'd from App Home; run in a channel it reports public-decision conflicts only.
+- **Consistency audit** — on demand, Consensus scans your standing decisions (up to the 60 most recent) in a two-stage sweep (LLM scan → verification by the measured judge, bidirectional) and surfaces latent contradictions — pairs of decisions that already conflict without anyone noticing. Permission-filtered per viewer, DM'd from App Home; run in a channel it reports public-decision conflicts only.
 
 ## See it in action
 
