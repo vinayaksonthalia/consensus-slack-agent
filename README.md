@@ -142,6 +142,18 @@ Consensus is fully self-hostable and runs on **your own model keys** — nothing
 
 A team can run their **own** private instance, on their **own** keys, with their **own** data. The demo sandbox judges test uses our keys; production users bring their own.
 
+### Bring Consensus to your workspace
+
+There's no marketplace listing yet, but any team can stand up its own instance in ~20 minutes:
+
+1. **Clone & install** — clone the repo, then `cd claude-agent-sdk && npm install`.
+2. **Create your Slack app** — from the included [`manifest.json`](manifest.json) (Slack CLI `slack create`, or [api.slack.com/apps](https://api.slack.com/apps) → *Create New App → From a manifest*). Turn on **Socket Mode**.
+3. **Get two tokens** — the **Bot token** (`xoxb-…`, from *OAuth & Permissions*) and an **App-level token** (`xapp-…`, scope `connections:write`, from *Basic Information → App-Level Tokens*).
+4. **Bring your own keys** — set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and **your own** model key: `CEREBRAS_API_KEY` **or** `GEMINI_API_KEY` **or** local Claude via the Agent SDK (the chain picks whichever is present). Optionally set `MONGODB_URI` for durable storage — omit it and Consensus falls back to a local `node:sqlite` / JSON file.
+5. **Run it** — `node app.js` locally, or deploy the included [`render.yaml`](render.yaml) to [Render](https://render.com) (how our 24/7 instance runs). Then invite the bot to the channels you want it to guard.
+
+Your instance runs entirely on **your keys, your workspace, your data** — nothing routes through us. A **one-click install + admin dashboard** (zero developer setup) is the [next item on our roadmap](#roadmap).
+
 ## Trust & safety design
 
 - Ephemeral-first alerts — nobody is called out publicly
