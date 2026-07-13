@@ -1,12 +1,13 @@
 /**
- * Workspace Consistency Audit — proactively X-ray the ENTIRE ledger of active
- * decisions against each other and surface LATENT contradictions that already
- * coexist unnoticed (decision-vs-decision, not message-vs-decision).
+ * Workspace Consistency Audit — proactively cross-check the standing decisions
+ * (up to MAX_DECISIONS most recent) against each other and surface LATENT
+ * contradictions that already coexist unnoticed (decision-vs-decision, not
+ * message-vs-decision).
  *
  * Two-stage design, reusing the measured contradiction judge as the source of
  * truth:
- *   - Stage A (scan): ONE LLM call proposes candidate conflicting pairs from the
- *     whole ledger — a cheap, high-recall candidate generator.
+ *   - Stage A (scan): ONE LLM call proposes candidate conflicting pairs from that
+ *     decision set — a cheap, high-recall candidate generator.
  *   - Stage B (verify): for each candidate pair, the EXISTING judgeContradiction
  *     (measured on a 58-case eval) renders the verdict. A pair is only confirmed
  *     when the judge says isContradiction with confidence >= 0.8.

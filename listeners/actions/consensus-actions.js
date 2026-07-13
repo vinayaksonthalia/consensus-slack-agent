@@ -73,6 +73,8 @@ export async function handleDismiss({ ack, body, respond, logger }) {
 export async function handleConfirmSupersede({ ack, body, respond, logger }) {
   await ack();
   try {
+    const userId = body.user?.id ?? null;
+    if (!canConfirm(userId)) return void (await refuseUnauthorized(respond));
     const decisionId = actionValue(body);
     if (decisionId) {
       await supersede(decisionId, null);
@@ -319,6 +321,8 @@ export async function handleRunAudit({ ack, body, client, logger }) {
 export async function handleAuditSupersede({ ack, body, respond, logger }) {
   await ack();
   try {
+    const userId = body.user?.id ?? null;
+    if (!canConfirm(userId)) return void (await refuseUnauthorized(respond));
     const id = actionValue(body);
     const decision = id ? await getDecision(id) : null;
     if (id) {

@@ -297,7 +297,7 @@ export function homeView({ stats, decisions, lastAudit = null }) {
           type: 'mrkdwn',
           text: lastAudit
             ? `Last audit: ${shortDate(lastAudit.at)} · ${lastAudit.checkedCount} checked · ${lastAudit.confirmedCount} latent conflict${lastAudit.confirmedCount === 1 ? '' : 's'} found`
-            : 'X-ray the whole ledger for standing decisions that already contradict each other.',
+            : 'Scan your standing decisions for pairs that already contradict each other.',
         },
       ],
     },
