@@ -6,7 +6,7 @@
 
 ### Workspace consistency guardian
 
-**The first ambient consistency layer for Slack — a contradiction firewall for organizational memory.**
+**An ambient consistency layer for Slack — a contradiction firewall for organizational memory.**
 
 [![CI](https://github.com/BitTriad/consensus-slack-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/BitTriad/consensus-slack-agent/actions/workflows/ci.yml)
 [![Eval](https://img.shields.io/badge/eval-hosted%2057%2F58%20%C2%B7%20P%201.000%20%C2%B7%20R%200.964%20%C2%B7%209%2F9%20injections-brightgreen)](consensus-core/eval/EVAL-RESULTS-hosted.txt)
@@ -15,7 +15,7 @@
 
 </div>
 
-**Catch it before it ships wrong.** Consensus is the first ambient consistency layer for Slack — a contradiction firewall for organizational memory. It notices when your team makes a decision, remembers it with full provenance, and catches anyone about to contradict it — live, across channels, permission-aware — before the mistake ships.
+**Catch it before it ships wrong.** Consensus is an ambient consistency layer for Slack — a contradiction firewall for organizational memory. It notices when your team makes a decision, remembers it with full provenance, and catches anyone about to contradict it — live, across channels, permission-aware — before the mistake ships.
 
 Built for the **Slack Agent Builder Challenge 2026** (Track 1: Best New Slack Agent).
 
@@ -58,7 +58,7 @@ Claude (local dev, Agent SDK)     56/58 · Precision 0.964 · Recall 0.964  (sam
 
 Receipts committed for every stack — hosted [`EVAL-RESULTS-hosted.txt`](consensus-core/eval/EVAL-RESULTS-hosted.txt), gemma [`EVAL-RESULTS-hosted-gemma.txt`](consensus-core/eval/EVAL-RESULTS-hosted-gemma.txt), local Claude [`EVAL-RESULTS.txt`](consensus-core/eval/EVAL-RESULTS.txt) — same prompts throughout. The harness hard-fails on LLM errors (parse failures count as hard errors, with one transient retry, so a dead model can never score) and reports precision as UNDEFINED with zero predicted positives. Run it: `npm run eval`.
 
-The scores are high because the judge is good, not because the test is soft — read the cases yourself in [`consensus-core/eval/dataset.js`](consensus-core/eval/dataset.js): 20 near-misses (same technology different scope, agreeing negations, expired time windows, superseded decisions, sarcasm) and 9 adversarial prompt-injection attacks are in the set specifically to *break* a naive matcher — including fullwidth-homoglyph, HTML-entity, and zero-width/RTL-override delimiter-break payloads that all fail to flip the verdict (untrusted content is NFKC-normalized before delimiter-wrapping). A keyword bot fails these; the scope-aware judge doesn't.
+The scores are high because the judge is good, not because the test is soft — read the cases yourself in [`consensus-core/eval/dataset.js`](consensus-core/eval/dataset.js): 20 near-misses (same technology different scope, agreeing negations, expired time windows, superseded decisions, sarcasm) sit alongside the 9 injection attacks, all chosen to *break* a naive matcher. Untrusted content is NFKC-normalized before delimiter-wrapping, so none of the payloads flip the verdict. A keyword bot fails these; the scope-aware judge doesn't.
 
 ## Required technologies (all three)
 
@@ -159,7 +159,7 @@ Your instance runs entirely on **your keys, your workspace, your data** — noth
 - Ephemeral-first alerts — nobody is called out publicly
 - Consent-first: the bot introduces itself on channel join; remove it to opt out
 - Human-in-the-loop: the agent proposes, people confirm; it never silently rewrites the record
-- Prompt-injection hardened: untrusted content is delimiter-wrapped and framed as data on every untrusted surface; measured against 6 attack patterns
+- Prompt-injection hardened: untrusted content is delimiter-wrapped and framed as data on every untrusted surface; measured against 9 adversarial injection patterns (all defeated on every model stack)
 - Private-channel content never leaks: per-alert and per-viewer membership checks, unknown privacy treated as private
 - Hardened by adversarial review: a multi-model hostile pass (GPT + Gemini) was triaged and its real findings fixed — audience-gated provenance (channel replies cite public decisions only; DMs are membership-gated), per-user sessions, and rate + queue + audit metering
 - Trust model is "members are colleagues" (company workspaces, not open-invite communities): anyone can state a decision and anyone can correct the ledger — but every action is public, attributed, and event-logged, so manipulation is visible and reversible rather than silently prevented. Abuse blunting is built in: per-user dismissal memory (nobody can silence alerts for anyone else), a per-author daily capture cap (ledger flooding is throttled), and per-user/global rate guards. Full raid-resistant admin controls (member-tenure gating, role-gated corrections) are roadmap
