@@ -162,8 +162,8 @@ Your instance runs entirely on **your keys, your workspace, your data** — noth
 - Consent-first: the bot introduces itself on channel join; remove it to opt out
 - Human-in-the-loop: the agent proposes, people confirm; it never silently rewrites the record
 - Prompt-injection hardened: untrusted content is delimiter-wrapped and framed as data on every untrusted surface; measured against 9 adversarial injection patterns (all defeated on every model stack)
-- Private-channel content never leaks: per-alert and per-viewer membership checks, unknown privacy treated as private
-- Hardened by adversarial review: a multi-model hostile pass (GPT + Gemini) was triaged and its real findings fixed — audience-gated provenance (channel replies cite public decisions only; DMs are membership-gated), per-user sessions, and rate + queue + audit metering
+- Private-channel decision content never leaks: per-alert and per-viewer membership checks, unknown privacy treated as private. (App Home shows only workspace-wide *aggregate* counters — alerts fired, precision — never private decision content, and labeled as workspace-wide.)
+- Hardened by adversarial review: earlier multi-model hostile passes (GPT, Gemini, and a GPT-Codex code+claims audit) were triaged — real findings fixed and remaining limitations documented openly, not claimed away — including audience-gated provenance (channel replies cite public decisions only; DMs are membership-gated), per-user sessions, precise claim scoping, and rate + queue + audit metering
 - Trust model is "members are colleagues" (company workspaces, not open-invite communities): anyone can state a decision and anyone can correct the ledger — but every action is public, attributed, and event-logged, so manipulation is visible and reversible rather than silently prevented. Abuse blunting is built in: per-user dismissal memory (nobody can silence alerts for anyone else), a per-author daily capture cap (ledger flooding is throttled), and per-user/global rate guards. Full raid-resistant admin controls (member-tenure gating, role-gated corrections) are roadmap
 
 ## Roadmap
