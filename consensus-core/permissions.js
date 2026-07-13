@@ -12,6 +12,9 @@
 const membershipCache = new Map();
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+// Runaway guard for member pagination. 200/page × 30 = 6,000 members — far above
+// any private channel this gate protects, so in practice the full set is fetched.
+const MAX_MEMBER_PAGES = 30;
 
 /**
  * Clear the membership cache. Test-only hook.
@@ -22,10 +25,11 @@ export function _resetMembershipCache() {
 }
 
 /**
- * Fetch (and cache) the member id set for a channel. Reads only the first page
- * of conversations.members — sufficient for workspace-scale channels in this
- * deployment. Any API failure yields an empty set (fail-closed: unknown → not a
- * member → redact), never throws.
+ * Fetch (and cache) the full member id set for a channel, following pagination
+ * cursors so a real member past the first page is never wrongly redacted
+ * (bounded by {@link MAX_MEMBER_PAGES} as a runaway guard). Any API failure
+ * yields an empty set (fail-closed: unknown → not a member → redact), never
+ * throws.
  *
  * @param {import('@slack/web-api').WebClient} client
  * @param {string} channelId
@@ -38,8 +42,15 @@ async function getMembers(client, channelId, logger) {
 
   const members = new Set();
   try {
-    const res = await client.conversations.members({ channel: channelId, limit: 200 });
-    for (const m of res.members || []) members.add(m);
+    /** @type {string | undefined} */
+    let cursor;
+    let pages = 0;
+    do {
+      const res = await client.conversations.members({ channel: channelId, limit: 200, cursor });
+      for (const m of res.members || []) members.add(m);
+      cursor = res.response_metadata?.next_cursor || undefined;
+      pages += 1;
+    } while (cursor && pages < MAX_MEMBER_PAGES);
   } catch (e) {
     logger?.error(`[consensus] permission-gate: conversations.members failed for ${channelId}: ${e}`);
     // Fail closed but do NOT cache the empty/failed result, so a transient
