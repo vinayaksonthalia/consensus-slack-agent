@@ -22,7 +22,7 @@ node --test        # unit + regression tests
 If you touch the contradiction judge or its prompts, also run the eval and include the metrics in your PR description:
 
 ```sh
-npm run eval       # 55-case labeled eval incl. adversarial injection cases
+npm run eval       # 58-case labeled eval incl. 9 adversarial injection attacks
 ```
 
 The bar: precision ≥ 0.85, recall ≥ 0.85, zero near-miss false positives, zero errored cases. Do not weaken dataset labels to make a prompt pass — improve the prompt or argue the label with evidence.
