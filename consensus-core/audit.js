@@ -8,7 +8,7 @@
  *   - Stage A (scan): ONE LLM call proposes candidate conflicting pairs from the
  *     whole ledger — a cheap, high-recall candidate generator.
  *   - Stage B (verify): for each candidate pair, the EXISTING judgeContradiction
- *     (measured on a 55-case eval) renders the verdict. A pair is only confirmed
+ *     (measured on a 58-case eval) renders the verdict. A pair is only confirmed
  *     when the judge says isContradiction with confidence >= 0.8.
  *
  * The scan prompt is the only thing tuned here; the judge is never modified, so
